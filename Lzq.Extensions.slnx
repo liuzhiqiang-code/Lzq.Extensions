@@ -1,0 +1,23 @@
+<Solution>
+  <Folder Name="/Solution Items/">
+    <File Path=".editorconfig" />
+    <File Path="build.bat" />
+    <File Path="Directory.Build.props" />
+    <File Path="README.md" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/Lzq.Core/Lzq.Core.csproj" Id="e28c047c-4cf4-4a98-acb1-44959071c449" />
+    <Project Path="src/Lzq.Extensions.AI/Lzq.Extensions.AI.csproj" />
+    <Project Path="src/Lzq.Extensions.EventBus.RabbitMq.Tests/Lzq.Extensions.EventBus.RabbitMq.Tests.csproj" Id="9f455bd1-e656-4f9d-9cf2-25d605227ad3" />
+    <Project Path="src/Lzq.Extensions.EventBus.RabbitMq/Lzq.Extensions.EventBus.RabbitMq.csproj" Id="cfa77f6d-35e4-431d-b245-ec6b09216d42" />
+    <Project Path="src/Lzq.Extensions.EventBus.Tests/Lzq.Extensions.EventBus.Tests.csproj" />
+    <Project Path="src/Lzq.Extensions.EventBus/Lzq.Extensions.EventBus.csproj" Id="5df42136-24b2-42ab-95e5-8f5093d9ee73" />
+    <Project Path="src/Lzq.Extensions.ExternalHttpApi/Lzq.Extensions.ExternalHttpApi.csproj" />
+    <Project Path="src/Lzq.Extensions.Jwt/Lzq.Extensions.Jwt.csproj" />
+    <Project Path="src/Lzq.Extensions.NSwag/Lzq.Extensions.NSwag.csproj" />
+    <Project Path="src/Lzq.Extensions.Redis/Lzq.Extensions.Redis.csproj" Id="7f23310a-5bbd-4cfe-b8f0-8e049108f36e" />
+    <Project Path="src/Lzq.Extensions.Serilog/Lzq.Extensions.Serilog.csproj" />
+    <Project Path="src/Lzq.Extensions.SqlSugar/Lzq.Extensions.SqlSugar.csproj" />
+  </Folder>
+  <Project Path="Lzq.Extensions.WebApi/Lzq.Extensions.WebApi.csproj" Id="258ece13-d4ed-4480-8aa0-bb4569b99c30" />
+</Solution>

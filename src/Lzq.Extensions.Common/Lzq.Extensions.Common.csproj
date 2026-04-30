@@ -1,0 +1,27 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFramework>net10.0</TargetFramework>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+
+		<!-- ===== NuGet 打包配置 ===== -->
+		<PackageId>$(AssemblyName)</PackageId>
+		<Version>$(Version)</Version>
+		<Authors>$(Authors)</Authors>
+		<Description></Description>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Masa.BuildingBlocks.Exceptions" Version="$(MASAFrameworkVersion)" />
+		<PackageReference Include="Masa.Utils.Extensions.DependencyInjection" Version="$(MASAFrameworkVersion)" />
+		<PackageReference Include="Masa.Utils.Security.Token" Version="$(MASAFrameworkVersion)" />
+		<PackageReference Include="Masa.Utils.Extensions.Enums" Version="$(MASAFrameworkVersion)" />
+		<PackageReference Include="Masa.Utils.Extensions.Validations.FluentValidation" Version="$(MASAFrameworkVersion)" />
+		<PackageReference Include="Masa.BuildingBlocks.ReadWriteSplitting.Cqrs" Version="$(MASAFrameworkVersion)" />
+		<PackageReference Include="Masa.Utils.Security.Cryptography" Version="$(MASAFrameworkVersion)" />
+		<PackageReference Include="Masa.Contrib.Data.Mapping.Mapster" Version="$(MASAFrameworkVersion)" />
+		<PackageReference Include="Masa.BuildingBlocks.Data.MappingExtensions" Version="$(MASAFrameworkVersion)" />
+	</ItemGroup>
+
+</Project>

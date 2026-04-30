@@ -1,0 +1,26 @@
+# Lzq.Extensions.SqlSugar
+
+配置
+```
+{
+  "DBConfigs": [
+    {
+      "Tag": "MsmConnection",
+      "DbType": "MySql",
+      "ConnectionString": "Server=106.54.42.201;Port=3306;Database=lzqnet_msm;Uid=lzqnet_msm;Pwd=MtNSejFLrFNemRZ6;Max Pool Size=500;Min Pool Size=50;",
+      "CommandTimeOut": "30"
+    },
+    {
+      "Tag": "LogConnection",
+      "DbType": "MySql",
+      "ConnectionString": "Server=106.54.42.201;Port=3306;Database=lzqnet_log;Uid=lzqnet_log;Pwd=asRfYFkyCcWFbiGB;Max Pool Size=500;Min Pool Size=50;",
+      "CommandTimeOut": "30"
+    }
+  ]
+}
+```
+
+builder.AddLzqMasaAssembly();//先注册程序集
+builder.AddLzqSqlSugar();
+
+使用

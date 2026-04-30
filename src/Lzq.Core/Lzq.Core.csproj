@@ -1,0 +1,33 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+
+		<!-- ===== NuGet 打包配置 ===== -->
+		<PackageId>$(AssemblyName)</PackageId>
+		<Version Condition="'$(Version)' == ''">1.0.0</Version>
+		<Authors>$(Authors)</Authors>
+		<Description></Description>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<FrameworkReference Include="Microsoft.AspNetCore.App" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Microsoft.Extensions.DependencyModel" Version="$(MicrosoftPackageVersion)" />
+
+		<PackageReference Include="Masa.Contrib.Service.MinimalAPIs" Version="$(MASAFrameworkVersion)" />
+		<PackageReference Include="Masa.Contrib.Exceptions" Version="$(MASAFrameworkVersion)" />
+		
+		<PackageReference Include="Masa.Utils.Extensions.DependencyInjection" Version="$(MASAFrameworkVersion)" />
+		<PackageReference Include="Masa.Utils.Extensions.Enums" Version="$(MASAFrameworkVersion)" />
+		<PackageReference Include="Masa.Utils.Extensions.Validations.FluentValidation" Version="$(MASAFrameworkVersion)" />
+		<PackageReference Include="Masa.Utils.Security.Cryptography" Version="$(MASAFrameworkVersion)" />
+		
+		<PackageReference Include="Masa.Contrib.Data.Mapping.Mapster" Version="$(MASAFrameworkVersion)" />
+		<PackageReference Include="Masa.BuildingBlocks.Data.MappingExtensions" Version="$(MASAFrameworkVersion)" />
+	</ItemGroup>
+
+</Project>

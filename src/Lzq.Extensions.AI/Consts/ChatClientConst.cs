@@ -1,0 +1,7 @@
+﻿namespace Lzq.Extensions.AI.Consts;
+
+public class ChatClientConst
+{
+    public const string DeepSeekChat = "DeepSeekChat";
+    public const string DeepSeekReasoner = "DeepSeekReasoner";
+}
