@@ -77,3 +77,40 @@ public record ApiResult<T> : ApiResult
     [JsonPropertyName("data")]
     public T? Data { get; set; }
 }
+
+/// <summary>
+/// ApiResult 扩展方法
+/// </summary>
+public static class ApiResultExtensions
+{
+    /// <summary>
+    /// 获取 ApiResult&lt;T&gt; 中的数据
+    /// </summary>
+    /// <typeparam name="T">数据类型</typeparam>
+    /// <param name="result">ApiResult实例</param>
+    /// <returns>数据对象，如果失败或类型不匹配返回null</returns>
+    public static T? GetData<T>(this ApiResult result)
+    {
+        if (result is ApiResult<T> typedResult)
+        {
+            return typedResult.Data;
+        }
+        return default;
+    }
+
+    /// <summary>
+    /// 获取 ApiResult&lt;T&gt; 中的数据，如果类型不匹配则抛出异常
+    /// </summary>
+    /// <typeparam name="T">数据类型</typeparam>
+    /// <param name="result">ApiResult实例</param>
+    /// <returns>数据对象</returns>
+    /// <exception cref="InvalidOperationException">当类型不匹配时抛出</exception>
+    public static T GetDataOrThrow<T>(this ApiResult result)
+    {
+        if (result is ApiResult<T> typedResult)
+        {
+            return typedResult.Data ?? throw new InvalidOperationException("Data is null");
+        }
+        throw new InvalidOperationException($"Cannot cast ApiResult to ApiResult<{typeof(T).Name}>");
+    }
+}

@@ -2,7 +2,6 @@
 using Lzq.Extensions.SqlSugar.Repository;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 using SqlSugar;
 using System.Reflection;
 using Yitter.IdGenerator;

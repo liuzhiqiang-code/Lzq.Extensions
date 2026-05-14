@@ -30,5 +30,4 @@
 		<ProjectReference Include="..\Lzq.Core\Lzq.Core.csproj" />
 		<ProjectReference Include="..\Lzq.Extensions.SqlSugar\Lzq.Extensions.SqlSugar.csproj" />
 	</ItemGroup>
-	
 </Project>

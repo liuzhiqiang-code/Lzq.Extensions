@@ -33,11 +33,11 @@ builder.Services.AddLzqJwt(builder.Configuration, options =>
     options.SecurityKey = "your-secret-key-at-least-16-chars";
 });
 
-builder.Services.AddLzqSqlSugar(builder.Configuration);
-
 builder.Services.AddLzqAI()
     .AddSqlSugarChatHistoryProvider()
     .AddLzqAgentSkills();
+
+builder.Services.AddLzqSqlSugar(builder.Configuration);
 
 builder.Services.AddCoreMinimalAPIs();// 一定是Build前最后添加
 

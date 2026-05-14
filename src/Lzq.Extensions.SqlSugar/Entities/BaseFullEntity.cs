@@ -6,7 +6,7 @@ namespace Lzq.Extensions.SqlSugar.Entities;
 
 public abstract class BaseFullEntity : IBaseFullEntity
 {
-    [SugarColumn(ColumnName = "id",IsPrimaryKey = true)]
+    [SugarColumn(ColumnName = "id", IsPrimaryKey = true)]
     public long Id { get; set; } = YitIdHelper.NextId();
 
     [SugarColumn(ColumnName = "creator")]
@@ -25,7 +25,7 @@ public abstract class BaseFullEntity : IBaseFullEntity
     public bool IsDeleted { get; set; }
 }
 
-public interface IBaseFullEntity : IEntity
+public interface IBaseFullEntity : IEntity, IDeleted
 {
     public long Creator { get; set; }
 
@@ -34,6 +34,4 @@ public interface IBaseFullEntity : IEntity
     public long Modifier { get; set; }
 
     public DateTime ModificationTime { get; set; }
-
-    public bool IsDeleted { get; set; }
 }

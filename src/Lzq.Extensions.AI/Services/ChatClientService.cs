@@ -1,6 +1,5 @@
 ﻿using Lzq.Extensions.AI.Interfaces;
 using Microsoft.Extensions.AI;
-using Microsoft.Extensions.Options;
 using OllamaSharp;
 using OpenAI;
 using System.ClientModel;
@@ -11,14 +10,6 @@ namespace Lzq.Extensions.AI.Services;
 public class ChatClientService: IChatClientService, IDisposable
 {
     private readonly ConcurrentDictionary<string, IChatClient> _chatClientDictionary = new();
-    private readonly IOptionsMonitor<List<AISetting>> _optionsMonitor;
-    private readonly IDisposable? _onChangeToken;
-
-    public ChatClientService(IOptionsMonitor<List<AISetting>> optionsMonitor)
-    {
-        _optionsMonitor = optionsMonitor;
-        _onChangeToken = _optionsMonitor.OnChange(_ => ClearAndDisposeClients());
-    }
 
     private void ClearAndDisposeClients()
     {
@@ -44,33 +35,20 @@ public class ChatClientService: IChatClientService, IDisposable
         }
     }
 
-    public IChatClient GetChatClient(string configId)
-    {
-        var aiSetting = _optionsMonitor.CurrentValue.FirstOrDefault(x => x.ConfigId == configId);
-        if (aiSetting == null)
-            throw new InvalidOperationException($"未找到ConfigId: {configId}");
-
-        return _chatClientDictionary.GetOrAdd(configId, _ => CreateChatClient(aiSetting));
-    }
-
     public IChatClient GetChatClient(AISetting aiSetting)
     {
         if (aiSetting == null)
             throw new InvalidOperationException($"参数不能为空");
 
-        return CreateChatClient(aiSetting);
+        return _chatClientDictionary.GetOrAdd(aiSetting.ConfigId, _ => CreateChatClient(aiSetting));
     }
 
     private IChatClient CreateChatClient(AISetting aiSetting)
     {
-        if (string.IsNullOrWhiteSpace(aiSetting.Url))
-            throw new InvalidOperationException($"ConfigId '{aiSetting.ConfigId}' 的Url配置不能为空");
-
-        if (string.IsNullOrWhiteSpace(aiSetting.KeySecret))
-            throw new InvalidOperationException($"ConfigId '{aiSetting.ConfigId}' 的KeySecret配置不能为空");
-
-        if (string.IsNullOrWhiteSpace(aiSetting.Model))
-            throw new InvalidOperationException($"ConfigId '{aiSetting.ConfigId}' 的Model配置不能为空");
+        if (string.IsNullOrWhiteSpace(aiSetting.Url) ||
+            string.IsNullOrWhiteSpace(aiSetting.KeySecret) ||
+            string.IsNullOrWhiteSpace(aiSetting.Model))
+            throw new InvalidOperationException($"ConfigId '{aiSetting.ConfigId}' 配置不完整");
 
         try
         {
@@ -80,16 +58,7 @@ public class ChatClientService: IChatClientService, IDisposable
             }
             else
             {
-                var openAIClientOptions = new OpenAIClientOptions
-                {
-                    Endpoint = new Uri(aiSetting.Url)
-                };
-
-                var openAIClient = new OpenAIClient(
-                    new ApiKeyCredential(aiSetting.KeySecret),
-                    openAIClientOptions);
-
-                var chatClient = openAIClient.GetChatClient(aiSetting.Model);
+                var chatClient = CreateOpenAIChatClient(aiSetting);
                 return chatClient.AsIChatClient();
             }
         }
@@ -103,9 +72,22 @@ public class ChatClientService: IChatClientService, IDisposable
         }
     }
 
+    public OpenAI.Chat.ChatClient CreateOpenAIChatClient(AISetting aiSetting) 
+    {
+        var openAIClientOptions = new OpenAIClientOptions
+        {
+            Endpoint = new Uri(aiSetting.Url)
+        };
+
+        var openAIClient = new OpenAIClient(
+            new ApiKeyCredential(aiSetting.KeySecret),
+            openAIClientOptions);
+
+        return openAIClient.GetChatClient(aiSetting.Model);
+    }
+
     public void Dispose()
     {
-        _onChangeToken?.Dispose();
         ClearAndDisposeClients();
     }
 }

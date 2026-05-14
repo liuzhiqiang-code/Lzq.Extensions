@@ -49,6 +49,7 @@ public static class JwtExtensions
         services.AddAuthorization(options =>
         {
             options.AddPolicy("default", policy => policy.RequireAuthenticatedUser());
+            options.AddPolicy("AdminOnly", policy => policy.RequireRole("Admin"));
 
             // 退回策略
             options.FallbackPolicy = new AuthorizationPolicyBuilder()

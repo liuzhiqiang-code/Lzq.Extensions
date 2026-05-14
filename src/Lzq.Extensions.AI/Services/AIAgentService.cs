@@ -1,125 +1,193 @@
 ﻿using Lzq.Extensions.AI.AgentSkills;
 using Lzq.Extensions.AI.Interfaces;
+using Lzq.Extensions.AI.Provider;
 using Microsoft.Agents.AI;
 using Microsoft.Agents.AI.Workflows;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using OpenAI.Chat;
+using System.Runtime.CompilerServices;
 using System.Text;
-using System.Reflection;
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using ChatMessage = Microsoft.Extensions.AI.ChatMessage;
 
 namespace Lzq.Extensions.AI.Services
 {
     /// <summary>
     /// AI服务
     /// </summary>
-    public class AIAgentService(IChatClientService chatClientService, ChatHistoryProvider chatHistoryProvider, AgentSkillProvider agentSkillProvider) : IAIAgentService
+    public class AIAgentService : IAIAgentService
     {
-        private readonly IChatClientService _chatClientService = chatClientService;
-        private readonly ChatHistoryProvider _chatHistoryProvider = chatHistoryProvider;
-        private readonly AgentSkillProvider _agentSkillProvider = agentSkillProvider;
-        public static string AIRulePrompt = "";
+        private readonly ILoggerFactory _loggerFactory;
+        private readonly IChatClientService _chatClientService;
+        private readonly ChatHistoryProvider _chatHistoryProvider;
+        private readonly AgentSkillProvider _agentSkillProvider;
+        private readonly ILogger<AIAgentService> _logger;
+
+        public AIAgentService(
+            ILoggerFactory loggerFactory,
+            IChatClientService chatClientService,
+            ChatHistoryProvider chatHistoryProvider,
+            AgentSkillProvider agentSkillProvider,
+            ILogger<AIAgentService> logger)
+        {
+            _loggerFactory = loggerFactory;
+            _chatClientService = chatClientService;
+            _chatHistoryProvider = chatHistoryProvider;
+            _agentSkillProvider = agentSkillProvider;
+            _logger = logger;
+        }
 
         /// <summary>
         /// 获取代理
         /// </summary>
         /// <returns></returns>
-        public IChatClient GetChatClient(string chatClientModel)
+        public IChatClient GetChatClient(AISetting setting)
         {
-            return _chatClientService.GetChatClient(chatClientModel);
+            return _chatClientService.GetChatClient(setting);
         }
 
-        public AIAgent CreateAIAgent(IChatClient chatClient, AIAgentModel aIAgentModel)
+        public AIAgent CreateAIAgent(IChatClient chatClient, AIAgentModel model)
         {
             ArgumentNullException.ThrowIfNull(chatClient);
-            ArgumentNullException.ThrowIfNull(aIAgentModel);
+            ArgumentNullException.ThrowIfNull(model);
 
-            var tools = new List<AITool>();
+            var skillsProvider = _agentSkillProvider.BuildAgentSkillsProviderBySelectedSkills(model.SelectedSkills);
 
-            if (aIAgentModel.SelectedSkills?.Any() == true)
+            // 深拷贝 ChatOptions 避免引用污染
+            var chatOptions = new ChatOptions();
+            if (model.ChatOptions != null)
             {
-                var allSkillInstances = _agentSkillProvider.GetSkills();
-
-                foreach (var entry in aIAgentModel.SelectedSkills)
-                {
-                    // 匹配插件实例（增加 dynamic 调用的保护）
-                    var skillInstance = allSkillInstances.FirstOrDefault(s =>
-                    {
-                        try { return (s as dynamic).Frontmatter.Name.Equals(entry.SkillName, StringComparison.OrdinalIgnoreCase); }
-                        catch { return false; }
-                    });
-
-                    if (skillInstance == null) continue;
-
-                    // 1. 提取所有带有特性的公有方法
-                    var methodInfos = skillInstance.GetType()
-                        .GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.NonPublic)
-                        .Select(m => new
-                        {
-                            Method = m,
-                            // 检查是否具有框架底层特性
-                            Attr = m.GetCustomAttribute<AgentSkillScriptAttribute>(),
-                        })
-                        .Where(x => x.Attr != null);
-
-                    // 2. 过滤指定方法
-                    if (entry.ToolNames?.Any() == true)
-                    {
-                        // 过滤 Attr.Name
-                        methodInfos = methodInfos.Where(x =>
-                            !string.IsNullOrEmpty(x.Attr!.Name) &&
-                            entry.ToolNames.Contains(x.Attr.Name, StringComparer.OrdinalIgnoreCase));
-                    }
-
-                    foreach (var item in methodInfos)
-                    {
-                        var aiFunc = AIFunctionFactory.Create(item.Method, skillInstance);
-                        tools.Add(aiFunc);
-                    }
-                }
+                chatOptions.Instructions = model.ChatOptions.Instructions;
+                chatOptions.Temperature = model.ChatOptions.Temperature;
+                chatOptions.MaxOutputTokens = model.ChatOptions.MaxOutputTokens;
+                chatOptions.TopP = model.ChatOptions.TopP;
+                chatOptions.FrequencyPenalty = model.ChatOptions.FrequencyPenalty;
+                chatOptions.PresencePenalty = model.ChatOptions.PresencePenalty;
+                chatOptions.StopSequences = model.ChatOptions.StopSequences;
             }
 
             var options = new ChatClientAgentOptions
             {
-                Name = aIAgentModel.Name,
-                Description = aIAgentModel.Description,
-                ChatOptions = aIAgentModel.ChatOptions ?? new ChatOptions(),
+                Name = model.Name,
+                Description = model.Description,
+                ChatOptions = chatOptions,
                 ChatHistoryProvider = _chatHistoryProvider,
+                AIContextProviders = skillsProvider is not null ? [skillsProvider] : null,
             };
 
-            // 注入工具链
-            if (tools.Count > 0)
-            {
-                options.ChatOptions.Tools = tools.Cast<AITool>().ToList();
-            }
-            return chatClient.AsAIAgent(options);
+            return chatClient.AsBuilder()
+                .UseLogging(_loggerFactory) // 添加日志中间件
+                .Build() // 构建Agent
+                .AsAIAgent(options);
         }
 
-        public AIAgent CreateAIAgent(string chatClientModel, AIAgentModel aIAgentModel)
+        public AIAgent CreateAIAgent(AISetting setting, AIAgentModel aIAgentModel)
         {
-            var chatClient = GetChatClient(chatClientModel);
+            var chatClient = GetChatClient(setting);
             return CreateAIAgent(chatClient, aIAgentModel);
         }
 
-        public async Task<(AgentResponse, AgentSession)> RunAsync(AIAgent aiAgent, string message, AgentSession? agentSession = null)
+        public async Task<(AgentResponse, string)> RunAsync(AIAgent aiAgent, string message, string? sessionDbKey = null)
         {
-            agentSession ??= await aiAgent.CreateSessionAsync();
+            sessionDbKey ??= Guid.NewGuid().ToString();
+            var agentSession = await InitializeAgentSessionAsync(aiAgent, sessionDbKey);
             var reslut = await aiAgent.RunAsync(message, agentSession);
-            return (reslut, agentSession);
+            return (reslut, sessionDbKey);
         }
 
-        public async Task<(string, AgentSession)> RunStreamingAsync(AIAgent aiAgent, string message, Func<string,Task> streameCallbackAsync, AgentSession? agentSession = null)
+        public async Task<(AgentResponse, string)> RunAsync(AIAgent aiAgent, ChatMessage message, string? sessionDbKey = null)
         {
-            agentSession ??= await aiAgent.CreateSessionAsync();
+            sessionDbKey ??= Guid.NewGuid().ToString();
+            var agentSession = await InitializeAgentSessionAsync(aiAgent, sessionDbKey);
+            var reslut = await aiAgent.RunAsync(message, agentSession);
+            return (reslut, sessionDbKey);
+        }
+
+        public async Task<(string, string)> RunStreamingAsync(AIAgent aiAgent, string message, Func<string,Task> streameCallbackAsync, string? sessionDbKey = null)
+        {
+            sessionDbKey ??= Guid.NewGuid().ToString();
+            var agentSession = await InitializeAgentSessionAsync(aiAgent, sessionDbKey);
             var sb = new StringBuilder();
             await foreach (AgentResponseUpdate update in aiAgent.RunStreamingAsync(message, agentSession))
             {
                 if (!string.IsNullOrEmpty(update.Text))
                 {
-                    await streameCallbackAsync.Invoke(update.Text);
                     sb.Append(update.Text);
+                    await streameCallbackAsync.Invoke(update.Text);
+                }
+                // 2. 工具调用请求 / 工具结果（存在于 Contents 中）
+                foreach (var content in update.Contents)
+                {
+                    if (content is FunctionCallContent functionCall)
+                    {
+                        _logger.LogDebug("Agent 请求工具调用: {ToolName}({Arguments})",
+                            functionCall.Name, functionCall.Arguments);
+                    }
+                    else if (content is FunctionResultContent functionResult)
+                    {
+                        _logger.LogDebug("工具调用结果: CallId={CallId}, Result={Result}",
+                        functionResult.CallId, functionResult.Result);
+                    }
                 }
             }
-            return (sb.ToString(), agentSession);
+            return (sb.ToString(), sessionDbKey);
+        }
+
+        public async IAsyncEnumerable<AgentResponseUpdate> RunStreamingUpdatesAsync(
+            AIAgent aiAgent,
+            string message,
+            string? sessionDbKey = null,
+            [EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
+            //var chatMessage = new Microsoft.Extensions.AI.ChatMessage
+            //{
+            //    Role = ChatRole.User,
+            //    Contents = new List<AIContent> { new DataContent( new Uri(""),"" )  }
+            //};
+            //var json = chatMessage.ToJson();
+
+            sessionDbKey ??= Guid.NewGuid().ToString();
+            var agentSession = await InitializeAgentSessionAsync(aiAgent, sessionDbKey);
+            await foreach (AgentResponseUpdate update in aiAgent.RunStreamingAsync(message, agentSession, null, cancellationToken))
+            {
+                yield return update;
+            }
+        }
+
+        private async Task<AgentSession> InitializeAgentSessionAsync(AIAgent aiAgent, string sessionDbKey)
+        {
+            //// 持久化agentSession
+            //JsonElement serializedSession = await agent.SerializeSessionAsync(agentSession);
+            //var agentSessionJson = serializedSession.ToString();
+
+
+            //// 反序列化agentSession
+            //JsonElement savedElement = JsonDocument.Parse(agentSessionJson).RootElement;
+            //var agentSession2 = await agent.DeserializeSessionAsync(savedElement);
+
+            var root = new JsonObject();
+            var stateBagObj = new JsonObject();
+
+            if (_chatHistoryProvider is SqlSugarChatHistoryProvider)
+            {
+                stateBagObj["SqlSugarChatHistoryProvider"] = new JsonObject
+                {
+                    ["sessionDbKey"] = sessionDbKey
+                };
+            }
+            else if (_chatHistoryProvider is VectorChatHistoryProvider)
+            {
+                stateBagObj["VectorChatHistoryProvider"] = new JsonObject
+                {
+                    ["sessionDbKey"] = sessionDbKey
+                };
+            }
+            root["stateBag"] = stateBagObj;
+            JsonElement savedElement = JsonDocument.Parse(root.ToJsonString()).RootElement;
+            return await aiAgent.DeserializeSessionAsync(savedElement);
         }
     }
 }

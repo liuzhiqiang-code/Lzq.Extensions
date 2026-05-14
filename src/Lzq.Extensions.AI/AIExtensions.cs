@@ -12,10 +12,6 @@ namespace Lzq.Extensions.AI
     {
         public static IServiceCollection AddLzqAI(this IServiceCollection services)
         {
-            services.AddOptions<List<AISetting>>().BindConfiguration("AISettings")
-                .Validate(settings => settings.Count > 0, "AISettings 列表不能为空")
-                .ValidateOnStart();
-
             // 注入消息持久化
             services.AddSingleton<VectorStore>(new InMemoryVectorStore());
             services.AddSingleton<ChatHistoryProvider, VectorChatHistoryProvider>();

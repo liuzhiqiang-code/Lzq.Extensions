@@ -8,17 +8,17 @@ namespace Lzq.Extensions.AI.Interfaces;
 public interface IChatClientService
 {
     /// <summary>
-    /// 获取指定配置的聊天客户端
-    /// </summary>
-    /// <param name="configId">配置ID</param>
-    /// <returns>聊天客户端实例</returns>
-    IChatClient GetChatClient(string configId);
-
-    /// <summary>
-    /// 获取新的聊天客户端
+    /// 获取聊天客户端实例
     /// </summary>
     /// <param name="configId">配置ID</param>
     /// <returns>聊天客户端实例</returns>
     IChatClient GetChatClient(AISetting setting);
+
+    /// <summary>
+    /// OpenAIChatClient
+    /// </summary>
+    /// <param name="aiSetting"></param>
+    /// <returns></returns>
+    OpenAI.Chat.ChatClient CreateOpenAIChatClient(AISetting aiSetting);
 
 }

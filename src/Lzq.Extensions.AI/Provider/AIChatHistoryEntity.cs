@@ -12,6 +12,9 @@ public class AIChatHistoryEntity : BaseFullEntity
     [SugarColumn(ColumnName = "session_id")]
     public string? SessionId { get; set; }
 
+    [SugarColumn(ColumnName = "turn_id")]
+    public int? TurnId { get; set; }
+
     [SugarColumn(ColumnName = "role")]
     public string Role { get; internal set; }
 

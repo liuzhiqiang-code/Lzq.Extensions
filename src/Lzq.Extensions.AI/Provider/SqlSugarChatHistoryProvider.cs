@@ -16,59 +16,129 @@ public sealed class SqlSugarChatHistoryProvider : ChatHistoryProvider
         Func<AgentSession?, State>? stateInitializer = null,
         string? stateKey = null)
     {
-        this._sessionState = new ProviderSessionState<State>(
+        _sessionState = new ProviderSessionState<State>(
             stateInitializer ?? (_ => new State(Guid.NewGuid().ToString("N"))),
-            stateKey ?? this.GetType().Name);
-        this._sqlSugarClient = sqlSugarClient ?? throw new ArgumentNullException(nameof(sqlSugarClient));
+            stateKey ?? GetType().Name);
+        _sqlSugarClient = sqlSugarClient ?? throw new ArgumentNullException(nameof(sqlSugarClient));
     }
 
-    public override IReadOnlyList<string> StateKeys => this._stateKeys ??= [this._sessionState.StateKey];
+    public override IReadOnlyList<string> StateKeys => _stateKeys ??= [_sessionState.StateKey];
 
     public string GetSessionDbKey(AgentSession session)
-        => this._sessionState.GetOrInitializeState(session).SessionDbKey;
+        => _sessionState.GetOrInitializeState(session).SessionDbKey;
 
-    protected override async ValueTask<IEnumerable<ChatMessage>> ProvideChatHistoryAsync(InvokingContext context, CancellationToken cancellationToken = default)
+    // ==================== 读取历史消息（按轮次截取） ====================
+    protected override async ValueTask<IEnumerable<ChatMessage>> ProvideChatHistoryAsync(
+        InvokingContext context, CancellationToken cancellationToken = default)
     {
-        var state = this._sessionState.GetOrInitializeState(context.Session);
+        var state = _sessionState.GetOrInitializeState(context.Session);
 
-        var records = await this._sqlSugarClient.Queryable<AIChatHistoryEntity>()
-            .Where(a=>a.SessionId == state.SessionDbKey)
-            .Take(10)
-            .OrderByDescending(a=>a.CreationTime)
+        // 先按时间正序多取一些消息（例如最近 500 条）
+        var allRecords = await _sqlSugarClient.Queryable<AIChatHistoryEntity>()
+            .Where(a => a.SessionId == state.SessionDbKey)
+            .OrderBy(a => a.CreationTime)
+            .Take(500)
             .ToListAsync();
 
-        var messages = records.ConvertAll(x => JsonSerializer.Deserialize<ChatMessage>(x.SerializedMessage!)!);
-        messages.Reverse();
-        return messages;
+        if (allRecords.Count == 0)
+            return Enumerable.Empty<ChatMessage>();
+
+        // 从后向前收集最近 10 个不同的轮次
+        const int maxTurns = 10;
+        var selectedIds = new HashSet<int>();
+        var selectedRecords = new List<AIChatHistoryEntity>();
+
+        for (int i = allRecords.Count - 1; i >= 0; i--)
+        {
+            var rec = allRecords[i];
+            int? turnId = rec.TurnId;
+            // 忽略无效轮次（兼容旧数据）
+            if (turnId == null || selectedIds.Contains(turnId.Value))
+                continue;
+
+            selectedIds.Add(turnId.Value);
+            if (selectedIds.Count > maxTurns)
+                break;
+        }
+
+        // 再次遍历，但这次按正序收集所有属于这些轮次的消息
+        var resultMessages = allRecords
+            .Where(r => r.TurnId.HasValue && selectedIds.Contains(r.TurnId.Value))
+            .Select(r => JsonSerializer.Deserialize<ChatMessage>(r.SerializedMessage!)!)
+            .ToList();
+
+        return resultMessages;
     }
 
-    protected override async ValueTask StoreChatHistoryAsync(InvokedContext context, CancellationToken cancellationToken = default)
+    // ==================== 存储历史消息 ====================
+    protected override async ValueTask StoreChatHistoryAsync(
+        InvokedContext context, CancellationToken cancellationToken = default)
     {
-        var state = this._sessionState.GetOrInitializeState(context.Session);
+        var state = _sessionState.GetOrInitializeState(context.Session);
 
         var allNewMessages = context.RequestMessages.Concat(context.ResponseMessages ?? []).ToList();
-        var entities = allNewMessages.Select(x => new AIChatHistoryEntity() 
+        if (allNewMessages.Count == 0) return;
+
+        // 确定当前轮次编号
+        int currentTurnId;
+        if (allNewMessages[0].Role == ChatRole.User)
         {
-            Key = state.SessionDbKey + x.MessageId,
+            // 新轮次：获取当前最大轮次 + 1
+            var maxTurn = await GetMaxTurnIdFromDb(state.SessionDbKey, cancellationToken);
+            currentTurnId = maxTurn + 1;
+        }
+        else
+        {
+            // 后续 assistant/tool 消息沿用上一轮编号
+            var lastTurnId = await GetLastTurnIdFromDb(state.SessionDbKey, cancellationToken);
+            currentTurnId = lastTurnId ?? 1;
+        }
+
+        // 构造实体，Key 唯一
+        var entities = allNewMessages.Select(msg => new AIChatHistoryEntity
+        {
+            Key = $"{state.SessionDbKey}_{msg.MessageId ?? "msg"}_{Guid.NewGuid():N}",
             SessionId = state.SessionDbKey,
-            Role = x.Role.ToString(),
-            SerializedMessage = JsonSerializer.Serialize(x),
-            Content = x.Text
+            TurnId = currentTurnId,
+            Role = msg.Role.ToString(),
+            SerializedMessage = JsonSerializer.Serialize(msg),
+            Content = msg.Text
         }).ToList();
+
         if (entities.Any())
-            await this._sqlSugarClient.Insertable<AIChatHistoryEntity>(entities).ExecuteCommandAsync(cancellationToken);
+            await _sqlSugarClient.Insertable(entities).ExecuteCommandAsync(cancellationToken);
+    }
+
+    // ==================== 辅助方法 ====================
+
+    /// <summary>
+    /// 获取当前会话的最大轮次编号，若没有记录则返回 0
+    /// </summary>
+    private async Task<int> GetMaxTurnIdFromDb(string sessionDbKey, CancellationToken cancellationToken)
+    {
+        var last = await _sqlSugarClient.Queryable<AIChatHistoryEntity>()
+            .Where(a => a.SessionId == sessionDbKey)
+            .OrderBy(a => a.CreationTime, OrderByType.Desc)
+            .FirstAsync(cancellationToken);
+        return last?.TurnId ?? 0;
     }
 
     /// <summary>
-    /// Represents the per-session state stored in the <see cref="AgentSession.StateBag"/>.
+    /// 获取最近一条记录的轮次编号（用于沿用轮次）
     /// </summary>
+    private async Task<int?> GetLastTurnIdFromDb(string sessionDbKey, CancellationToken cancellationToken)
+    {
+        var last = await _sqlSugarClient.Queryable<AIChatHistoryEntity>()
+            .Where(a => a.SessionId == sessionDbKey)
+            .OrderBy(a => a.CreationTime, OrderByType.Desc)
+            .FirstAsync(cancellationToken);
+        return last?.TurnId;
+    }
+
+    // ==================== 内部状态 ====================
     public sealed class State
     {
-        public State(string sessionDbKey)
-        {
-            this.SessionDbKey = sessionDbKey ?? throw new ArgumentNullException(nameof(sessionDbKey));
-        }
-
         public string SessionDbKey { get; }
+        public State(string sessionDbKey) => SessionDbKey = sessionDbKey ?? throw new ArgumentNullException(nameof(sessionDbKey));
     }
 }
