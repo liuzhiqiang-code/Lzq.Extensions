@@ -62,6 +62,7 @@ jobs:
 
       - name: Login to NuGet (OIDC)
         uses: NuGet/login@v1
+        id: login
         with:
           user: lzq   # 你的 NuGet.org 用户名
 
