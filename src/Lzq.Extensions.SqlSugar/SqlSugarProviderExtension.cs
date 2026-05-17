@@ -1,22 +1,33 @@
 ﻿using Lzq.Core.Interfaces;
 using Lzq.Extensions.SqlSugar.Entities;
+using Lzq.Extensions.SqlSugar.SeedData;
 using Masa.BuildingBlocks.Data;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using SqlSugar;
+using Yitter.IdGenerator;
 
 namespace Lzq.Extensions.SqlSugar;
 
 public static class SqlSugarProviderExtension
 {
-    private static readonly ILogger logger = MasaApp.GetRequiredService<ILoggerFactory>().CreateLogger("SqlSugarExtensions");
-    private static readonly ICurrentUser? currentUser = MasaApp.GetService<ICurrentUser>();
+    private static readonly HashSet<string> _auditTimeFields = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "CreationTime", "ModificationTime"
+    };
+
+    private static readonly HashSet<string> _auditUserFields = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Creator", "Modifier"
+    };
+
 
     /// <summary>
     /// CodeFirst
     /// </summary>
-    public static ISqlSugarClient UseCodeFirst(this ISqlSugarClient db)
+    public static ISqlSugarClient UseCodeFirst(this ISqlSugarClient db, IServiceProvider serviceProvider)
     {
+        var logger = serviceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("UseCodeFirst");
         var loadedAssemblies = MasaApp.GetAssemblies().ToList();
 
         // 获取所有实现了 IEntity 的非抽象类
@@ -33,7 +44,7 @@ public static class SqlSugarProviderExtension
             }
             catch (Exception ex)
             {
-                logger?.LogInformation($"UseCodeFirst：{type.FullName}执行失败:原因是:{ex.Message}");
+                logger?.LogError(ex, "UseCodeFirst 执行失败，实体类型：{EntityType}", type.FullName);
             }
         }
         return db;
@@ -42,43 +53,22 @@ public static class SqlSugarProviderExtension
     /// <summary>
     /// 种子数据
     /// </summary>
-    public static ISqlSugarClient UseSeedData(this ISqlSugarClient db)
+    public static ISqlSugarClient UseSeedData(this ISqlSugarClient db, IServiceProvider serviceProvider)
     {
-        var loadedAssemblies = MasaApp.GetAssemblies().ToList();
-        
-        // 获取所有实现了 ISeedData<> 的非抽象类
-        var seedDataTypes = loadedAssemblies
-            .SelectMany(a => a.GetTypes())
-            .Where(t => t is { IsClass: true, IsAbstract: false } &&
-                       t.GetInterfaces().Any(i => i.IsGenericType &&
-                                                  i.GetGenericTypeDefinition() == typeof(ISeedData<>)));
-        foreach (var type in seedDataTypes)
+        var logger = serviceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("SqlSugarSeedData");
+        var initializers = serviceProvider.GetServices<ISeedDataInitializer>();
+
+        foreach (var initializer in initializers)
         {
+            var type = initializer.GetType();
             try
             {
-                // 创建种子数据实例
-                var seedDataInstance = Activator.CreateInstance(type);
-
-                if (seedDataInstance == null)
-                {
-                    logger?.LogWarning($"无法创建 {type.FullName} 的实例");
-                    continue;
-                }
-
-                // 获取 Execute 方法
-                var executeMethod = type.GetMethod("Execute",
-                    System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
-                if (executeMethod != null)
-                {
-                    // 执行种子数据的同步方法
-                    executeMethod.Invoke(seedDataInstance, new object[] { db });
-                    logger?.LogInformation($"种子数据 {type.FullName} 执行成功");
-                }
-
+                initializer.Initialize(db);
+                logger.LogInformation("种子数据 {TypeName} 执行成功", type.FullName);
             }
             catch (Exception ex)
             {
-                logger?.LogError(ex, $"UseSeedData {type.FullName} 执行过程中发生错误");
+                logger.LogError(ex, "种子数据 {TypeName} 执行失败", type.FullName);
             }
         }
         return db;
@@ -87,8 +77,9 @@ public static class SqlSugarProviderExtension
     /// <summary>
     /// sql日志
     /// </summary>
-    public static SqlSugarProvider UseSqlLog(this SqlSugarProvider db)
+    public static SqlSugarProvider UseSqlLog(this SqlSugarProvider db, IServiceProvider serviceProvider)
     {
+        var logger = serviceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("UseSqlLog");
         //调试SQL事件，可以删掉 (要放在执行方法之前)
         db.Aop.OnLogExecuting = (sql, pars) =>
         {
@@ -117,20 +108,30 @@ public static class SqlSugarProviderExtension
     /// 字段审计
     /// </summary>
     /// <param name="db"></param>
-    public static SqlSugarProvider UseAuditedField(this SqlSugarProvider db)
+    public static SqlSugarProvider UseAuditedField(this SqlSugarProvider db, Func<ICurrentUser?> getCurrentUser)
     {
         db.Aop.DataExecuting = (oldValue, entityInfo) =>
         {
+            if (entityInfo.PropertyName == "Id" && entityInfo.OperationType == DataFilterType.InsertByObject
+            && (oldValue == null || (oldValue is long l && l == 0)))
+            {
+                var propType = entityInfo.EntityColumnInfo?.PropertyInfo?.PropertyType;
+                if (propType == typeof(long))
+                    entityInfo.SetValue(YitIdHelper.NextId());
+            }
             //inset生效
-            if ("CreationTime,ModificationTime".Split(',').Contains(entityInfo.PropertyName) && entityInfo.OperationType == DataFilterType.InsertByObject)
+            if (_auditTimeFields.Contains(entityInfo.PropertyName) && entityInfo.OperationType == DataFilterType.InsertByObject)
             {
                 entityInfo.SetValue(DateTime.Now);//修改CreateTime字段
             }
-            if ("Creator,Modifier".Split(',').Contains(entityInfo.PropertyName) && entityInfo.OperationType == DataFilterType.InsertByObject)
+            if (_auditUserFields.Contains(entityInfo.PropertyName) && entityInfo.OperationType == DataFilterType.InsertByObject)
             {
-                var userId = currentUser?.UserId;
-                if (userId.IsNullOrWhiteSpace())
-                    userId = "0";
+                var currentUser = getCurrentUser();
+                var userId = "0";
+                if (currentUser != null)
+                {
+                    userId = currentUser.UserId;
+                }
                 entityInfo.SetValue(userId);//修改Creator字段
             }
             //update生效
@@ -140,9 +141,12 @@ public static class SqlSugarProviderExtension
             }
             if (entityInfo.PropertyName == "Modifier" && entityInfo.OperationType == DataFilterType.UpdateByObject)
             {
-                var userId = currentUser?.UserId;
-                if (userId.IsNullOrWhiteSpace())
-                    userId = "0";
+                var currentUser = getCurrentUser();
+                var userId = "0";
+                if (currentUser != null)
+                {
+                    userId = currentUser.UserId;
+                }
                 entityInfo.SetValue(userId);//修改UpdateTime字段
             }
             // delete生效  (软删除)
@@ -159,8 +163,7 @@ public static class SqlSugarProviderExtension
     /// </summary>
     public static SqlSugarProvider UseQueryFilter(this SqlSugarProvider db)
     {
-        db.Context.QueryFilter
-            .AddTableFilter<IBaseFullEntity>(a => a.IsDeleted == false);
+        db.Context.QueryFilter.AddTableFilter<IBaseFullEntity>(a => a.IsDeleted == false);
         return db;
     }
 }

@@ -2,6 +2,11 @@
 
 public static class StringExtensions
 {
+    public static string Format(this string value, params object[] args)
+    {
+        return string.Format(value, args);
+    }
+
     public static int? ToInt32(this string? value)
     {
         return int.TryParse(value, out int result) ? result : null;

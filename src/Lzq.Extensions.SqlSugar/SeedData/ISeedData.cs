@@ -1,17 +1,15 @@
 ﻿using SqlSugar;
 
-namespace Lzq.Extensions.SqlSugar.Entities;
+namespace Lzq.Extensions.SqlSugar.SeedData;
 
-public interface ISeedData<TEntity>
+public interface ISeedData<TEntity> : ISeedDataInitializer
     where TEntity : class, new()
 {
-    /// <summary>
-    /// 种子数据
-    /// </summary>
-    /// <returns></returns>
     List<TEntity> GetSeedData();
-
     void Execute(ISqlSugarClient db);
+
+    // 默认实现，使旧类无需修改
+    void ISeedDataInitializer.Initialize(ISqlSugarClient db) => Execute(db);
 }
 
 public abstract class BaseSeedData<TEntity> : ISeedData<TEntity>

@@ -3,7 +3,7 @@ using SqlSugar;
 
 namespace Lzq.Extensions.AI.Provider;
 
-[Tenant("MsmConnection"), SugarTable("msm_ai_chat_history")]
+[Tenant("AgentForge"), SugarTable("msm_ai_chat_history")]
 public class AIChatHistoryEntity : BaseFullEntity
 {
     [SugarColumn(ColumnName = "key")]

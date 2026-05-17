@@ -1,0 +1,75 @@
+name: Publish to NuGet (Tag Trigger)
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+*'   # 匹配 v1.2.3 或 v1.2.3-preview.1
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write          # OIDC 令牌权限
+      contents: read
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup .NET SDKs
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            9.0.x
+            10.0.x
+
+      - name: Extract Version from Tag
+        id: version
+        run: |
+          # 去掉开头的 'v'，例如 v0.1.45 -> 0.1.45
+          TAG_NAME=${GITHUB_REF#refs/tags/}
+          VERSION=${TAG_NAME#v}
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Restore Dependencies
+        run: dotnet restore
+
+      - name: Build (Release)
+        run: dotnet build --configuration Release --no-restore
+
+      - name: Pack NuGet Packages
+        run: |
+          # 遍历指定的项目列表，使用标签版本进行打包
+          for proj in \
+            src/Lzq.Core/Lzq.Core.csproj \
+            src/Lzq.Extensions.AI/Lzq.Extensions.AI.csproj \
+            src/Lzq.Extensions.EventBus/Lzq.Extensions.EventBus.csproj \
+            src/Lzq.Extensions.EventBus.RabbitMq/Lzq.Extensions.EventBus.RabbitMq.csproj \
+            src/Lzq.Extensions.ExternalHttpApi/Lzq.Extensions.ExternalHttpApi.csproj \
+            src/Lzq.Extensions.Jwt/Lzq.Extensions.Jwt.csproj \
+            src/Lzq.Extensions.NSwag/Lzq.Extensions.NSwag.csproj \
+            src/Lzq.Extensions.Redis/Lzq.Extensions.Redis.csproj \
+            src/Lzq.Extensions.Serilog/Lzq.Extensions.Serilog.csproj \
+            src/Lzq.Extensions.SqlSugar/Lzq.Extensions.SqlSugar.csproj
+          do
+            dotnet pack "$proj" \
+              --configuration Release \
+              --no-build \
+              --output ./packages \
+              /p:Version=${{ steps.version.outputs.VERSION }}
+          done
+
+      - name: Login to NuGet (OIDC)
+        uses: NuGet/login@v1
+        with:
+          user: lzq   # 你的 NuGet.org 用户名
+
+      - name: Push Packages to NuGet
+        run: |
+          for file in ./packages/*.nupkg; do
+            dotnet nuget push "$file" \
+              --api-key ${{ steps.login.outputs.NUGET_API_KEY }} \
+              --source https://api.nuget.org/v3/index.json \
+              --skip-duplicate
+          done
