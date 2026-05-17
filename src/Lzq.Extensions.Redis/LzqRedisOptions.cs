@@ -23,4 +23,18 @@ public class LzqRedisOptions
     /// 是否为集群模式。
     /// </summary>
     public bool IsCluster { get; set; } = false;
+
+    // 主从模式用的从库连接串
+    public string[]? SlaveConnectionStrings { get; set; }
+
+    /// <summary>
+    /// 主从模式读写分离（从库承担读请求）。
+    /// </summary>
+    public bool ReadWriteSplitting { get; set; } = false;
+
+    /// <summary>
+    /// 哨兵模式下是否开启读写分离（从库承担读请求）。
+    /// </summary>
+    public bool SentinelRwSplitting { get; set; } = false;
+
 }

@@ -9,17 +9,24 @@ internal class LzqRedisClient : ILzqRedisClient
 {
     private readonly IRedisClient _client;
     private readonly ILogger<LzqRedisClient> _logger;
-    private readonly LzqRedisOptions _options; // 直接存储 Options
+    private readonly string _prefix;
     private const string NullValueTag = "NQ__";
+
+    // 统一的 JSON 序列化选项（与注册时的委托保持一致）
+    private static readonly JsonSerializerOptions _jsonOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+    };
 
     public LzqRedisClient(IRedisClient client, ILogger<LzqRedisClient> logger, IOptions<LzqRedisOptions> options)
     {
         _client = client;
         _logger = logger;
-        _options = options.Value;
+        _prefix = options.Value.Prefix;  // 仅保存前缀，不依赖全局 csb.Prefix
     }
 
-    private string FixKey(string key) => $"{_options.Prefix}{{{key}}}";
+    // 键格式化：添加前缀，并用花括号确保集群哈希一致性
+    private string FixKey(string key) => $"{_prefix}{{{key}}}";
 
     public T? Get<T>(string key) => _client.Get<T>(FixKey(key));
 
@@ -36,7 +43,7 @@ internal class LzqRedisClient : ILzqRedisClient
     public async Task SetAsync<T>(string key, T value, TimeSpan? expiry = null)
     {
         if (expiry.HasValue)
-            await _client.SetAsync(FixKey(key), value, (int)expiry.Value.TotalSeconds);
+            await _client.SetAsync(FixKey(key), value, expiry.Value); // 直接传递 TimeSpan
         else
             await _client.SetAsync(FixKey(key), value);
     }
@@ -53,55 +60,50 @@ internal class LzqRedisClient : ILzqRedisClient
     {
         var lockObj = _client.Lock(FixKey($"lock:{resourceKey}"), timeoutSeconds);
         if (lockObj == null)
-        {
             throw new Exception($"Failed to acquire lock for: {resourceKey}");
-        }
         return lockObj;
     }
 
     public async Task<T?> GetOrSetAsync<T>(string key, Func<Task<T?>> dataRetriever, TimeSpan? expiry = null)
     {
         var fullKey = FixKey(key);
-        var lockKey = $"{fullKey}:lock"; // 因为 fullKey 带有 {key}，所以 lockKey 也会落在同个 slot
+        var lockKey = $"{fullKey}:lock";
         var finalExpiry = expiry ?? TimeSpan.FromHours(1);
 
         const int maxRetry = 3;
-        int retryCount = 0;
-
-        while (retryCount < maxRetry)
+        for (int retry = 0; retry < maxRetry; retry++)
         {
-            // 1. 尝试读取
-            var cachedData = await _client.GetAsync<string>(fullKey);
+            // 1. 尝试读取（原生字符串，不触发序列化委托）
+            var cachedData = await _client.GetAsync(fullKey);
             if (cachedData == NullValueTag) return default;
-            if (!string.IsNullOrEmpty(cachedData)) return JsonSerializer.Deserialize<T>(cachedData);
+            if (!string.IsNullOrEmpty(cachedData))
+                return JsonSerializer.Deserialize<T>(cachedData, _jsonOptions);
 
-            // 2. 尝试获取锁
+            // 2. 获取锁
             using var @lock = _client.Lock(lockKey, 10);
             if (@lock == null)
             {
-                retryCount++;
-                await Task.Delay(100 * retryCount); // 指数退避
+                await Task.Delay(100 * (retry + 1));
                 continue;
             }
 
             // 3. 双重检查
-            cachedData = await _client.GetAsync<string>(fullKey);
+            cachedData = await _client.GetAsync(fullKey);
             if (!string.IsNullOrEmpty(cachedData))
-            {
-                return cachedData == NullValueTag ? default : JsonSerializer.Deserialize<T>(cachedData);
-            }
+                return cachedData == NullValueTag ? default : JsonSerializer.Deserialize<T>(cachedData, _jsonOptions);
 
             // 4. 回源
             var data = await dataRetriever();
-
             if (data == null)
             {
+                // 存储空值标记（原生字符串方法）
                 await _client.SetAsync(fullKey, NullValueTag, 60);
                 return default;
             }
 
             var jitterExpiry = GetRandomExpiry(finalExpiry);
-            await _client.SetAsync(fullKey, JsonSerializer.Serialize(data), (int)jitterExpiry.TotalSeconds);
+            // 存储对象（原生字符串方法，手动序列化）
+            await _client.SetAsync(fullKey, JsonSerializer.Serialize(data, _jsonOptions), (int)jitterExpiry.TotalSeconds);
             return data;
         }
 
@@ -110,7 +112,6 @@ internal class LzqRedisClient : ILzqRedisClient
 
     private TimeSpan GetRandomExpiry(TimeSpan baseExpiry)
     {
-        // 使用 Random.Shared 提高性能
         return baseExpiry.Add(TimeSpan.FromSeconds(Random.Shared.Next(0, 300)));
     }
 }

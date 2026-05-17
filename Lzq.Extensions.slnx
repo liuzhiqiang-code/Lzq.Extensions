@@ -1,7 +1,6 @@
 <Solution>
   <Folder Name="/Solution Items/">
     <File Path=".editorconfig" />
-    <File Path="build-and-push.bat" />
     <File Path="build.bat" />
     <File Path="Directory.Build.props" />
     <File Path="README.md" />
