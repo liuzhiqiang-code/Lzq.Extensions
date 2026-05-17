@@ -5,7 +5,7 @@ namespace Lzq.Extensions.AI.AgentSkills;
 public interface ISkillManager
 {
     IEnumerable<SkillInfo> GetSkills();
-    Task<object?> ExecuteAsync(string skillName, string toolName, Dictionary<string, object>? arguments);
+    Task<object?> ExecuteAsync(string skillName, string toolName, Dictionary<string, object?>? arguments);
 
     /// <summary>
     /// 上传技能程序集文件（DLL）

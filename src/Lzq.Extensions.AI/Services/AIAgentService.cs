@@ -140,7 +140,7 @@ namespace Lzq.Extensions.AI.Services
             AIAgent aiAgent,
             string message,
             string? sessionDbKey = null,
-            [EnumeratorCancellation] CancellationToken cancellationToken = default)
+            CancellationToken cancellationToken = default)
         {
             //var chatMessage = new Microsoft.Extensions.AI.ChatMessage
             //{

@@ -22,6 +22,6 @@ namespace Lzq.Extensions.AI.Interfaces
             AIAgent agent,
             string message,
             string? sessionDbKey = null,
-            [EnumeratorCancellation] CancellationToken cancellationToken = default);
+            CancellationToken cancellationToken = default);
     }
 }
