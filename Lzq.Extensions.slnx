@@ -17,6 +17,7 @@
     <Project Path="src/Lzq.Extensions.NSwag/Lzq.Extensions.NSwag.csproj" />
     <Project Path="src/Lzq.Extensions.Redis/Lzq.Extensions.Redis.csproj" Id="7f23310a-5bbd-4cfe-b8f0-8e049108f36e" />
     <Project Path="src/Lzq.Extensions.Serilog/Lzq.Extensions.Serilog.csproj" />
+    <Project Path="src/Lzq.Extensions.SqlSugar.Tests/Lzq.Extensions.SqlSugar.Tests.csproj" Id="9dc44d97-09ac-4e41-8d53-5aaf9f986124" />
     <Project Path="src/Lzq.Extensions.SqlSugar/Lzq.Extensions.SqlSugar.csproj" />
   </Folder>
   <Project Path="Lzq.Extensions.WebApi/Lzq.Extensions.WebApi.csproj" Id="258ece13-d4ed-4480-8aa0-bb4569b99c30" />

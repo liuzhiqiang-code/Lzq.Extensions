@@ -1,7 +1,9 @@
 ﻿using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using SqlSugar;
+using System.Text;
 using System.Text.Json;
+using static System.Net.Mime.MediaTypeNames;
 
 namespace Lzq.Extensions.AI.Provider;
 
@@ -83,30 +85,99 @@ public sealed class SqlSugarChatHistoryProvider : ChatHistoryProvider
         int currentTurnId;
         if (allNewMessages[0].Role == ChatRole.User)
         {
-            // 新轮次：获取当前最大轮次 + 1
             var maxTurn = await GetMaxTurnIdFromDb(state.SessionDbKey, cancellationToken);
             currentTurnId = maxTurn + 1;
         }
         else
         {
-            // 后续 assistant/tool 消息沿用上一轮编号
             var lastTurnId = await GetLastTurnIdFromDb(state.SessionDbKey, cancellationToken);
             currentTurnId = lastTurnId ?? 1;
         }
 
-        // 构造实体，Key 唯一
-        var entities = allNewMessages.Select(msg => new AIChatHistoryEntity
+        // 构造实体
+        var entities = allNewMessages.Select(msg =>
         {
-            Key = $"{state.SessionDbKey}_{msg.MessageId ?? "msg"}_{Guid.NewGuid():N}",
-            SessionId = state.SessionDbKey,
-            TurnId = currentTurnId,
-            Role = msg.Role.ToString(),
-            SerializedMessage = JsonSerializer.Serialize(msg),
-            Content = msg.Text
+            var role = msg.Role.ToString().ToLower();
+
+            return new AIChatHistoryEntity
+            {
+                Key = $"{state.SessionDbKey}_{msg.MessageId ?? "msg"}_{Guid.NewGuid():N}",
+                SessionId = state.SessionDbKey,
+                TurnId = currentTurnId,
+                Role = role,
+                Content = ParseContent(msg),           // 解析 Contents 存到 Content
+                SerializedMessage = JsonSerializer.Serialize(msg)
+            };
         }).ToList();
 
         if (entities.Any())
             await _sqlSugarClient.Insertable(entities).ExecuteCommandAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// 根据 ChatMessage.Contents 类型解析出有意义的文本内容
+    /// </summary>
+    private static List<StreamingEventArgs>? ParseContent(ChatMessage msg)
+    {
+        var parts = new List<StreamingEventArgs>();
+        var textBuilder = new StringBuilder();
+        var thinkingBuilder = new StringBuilder();
+
+        foreach (var content in msg.Contents ?? [])
+        {
+            switch (content)
+            {
+                case FunctionCallContent funcCall:
+                    parts.Add(new StreamingEventArgs
+                    {
+                        EventType = StreamingEventType.ToolCallStart,
+                        CallId = funcCall.CallId,
+                        ToolName = funcCall.Name,
+                        ToolArguments = funcCall.Arguments?.ToJson()
+                    });
+                    break;
+
+                case FunctionResultContent funcResult:
+                    parts.Add(new StreamingEventArgs
+                    {
+                        EventType = StreamingEventType.ToolCallEnd,
+                        CallId = funcResult.CallId,
+                        ToolResult = funcResult.Result?.ToString()
+                    });
+                    break;
+
+                case TextContent text:
+                    textBuilder.Append(text.Text);
+                    break;
+                case TextReasoningContent reasoningContent:
+                    thinkingBuilder.Append(reasoningContent.Text);
+                    //parts.Add(JsonSerializer.Serialize(new StreamingEventArgs
+                    //{
+                    //    EventType = StreamingEventType.Thinking,
+                    //    Content = reasoningContent.Text
+                    //}));
+                    break;
+            }
+        }
+
+        if (textBuilder.Length > 0)
+        {
+            parts.Add(new StreamingEventArgs
+            {
+                EventType = StreamingEventType.TextChunk,
+                Content = textBuilder.ToString()
+            });
+        }
+        if (thinkingBuilder.Length > 0) 
+        {
+            parts.Add(new StreamingEventArgs
+            {
+                EventType = StreamingEventType.Thinking,
+                Content = thinkingBuilder.ToString()
+            });
+        }
+
+        return parts.OrderBy(a => a.EventType).ToList();
     }
 
     // ==================== 辅助方法 ====================

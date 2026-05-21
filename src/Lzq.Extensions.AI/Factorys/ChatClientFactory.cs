@@ -5,9 +5,9 @@ using OpenAI;
 using System.ClientModel;
 using System.Collections.Concurrent;
 
-namespace Lzq.Extensions.AI.Services;
+namespace Lzq.Extensions.AI.Factorys;
 
-public class ChatClientService: IChatClientService, IDisposable
+public class ChatClientFactory: IChatClientFactory, IDisposable
 {
     private readonly ConcurrentDictionary<string, IChatClient> _chatClientDictionary = new();
 
@@ -35,7 +35,7 @@ public class ChatClientService: IChatClientService, IDisposable
         }
     }
 
-    public IChatClient GetChatClient(AISetting aiSetting)
+    public IChatClient GetOrCreate(AISetting aiSetting)
     {
         if (aiSetting == null)
             throw new InvalidOperationException($"参数不能为空");

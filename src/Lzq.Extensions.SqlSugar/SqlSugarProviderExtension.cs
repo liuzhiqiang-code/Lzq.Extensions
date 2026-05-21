@@ -2,6 +2,7 @@
 using Lzq.Extensions.SqlSugar.Entities;
 using Lzq.Extensions.SqlSugar.SeedData;
 using Masa.BuildingBlocks.Data;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using SqlSugar;
@@ -77,7 +78,7 @@ public static class SqlSugarProviderExtension
     /// <summary>
     /// sql日志
     /// </summary>
-    public static SqlSugarProvider UseSqlLog(this SqlSugarProvider db, IServiceProvider serviceProvider)
+    public static ISqlSugarClient UseSqlLog(this ISqlSugarClient db, IServiceProvider serviceProvider)
     {
         var logger = serviceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("UseSqlLog");
         //调试SQL事件，可以删掉 (要放在执行方法之前)
@@ -108,62 +109,76 @@ public static class SqlSugarProviderExtension
     /// 字段审计
     /// </summary>
     /// <param name="db"></param>
-    public static SqlSugarProvider UseAuditedField(this SqlSugarProvider db, Func<ICurrentUser?> getCurrentUser)
+    public static ISqlSugarClient UseAuditedField(this ISqlSugarClient db, IHttpContextAccessor httpContextAccessor)
     {
         db.Aop.DataExecuting = (oldValue, entityInfo) =>
         {
-            if (entityInfo.PropertyName == "Id" && entityInfo.OperationType == DataFilterType.InsertByObject
-            && (oldValue == null || (oldValue is long l && l == 0)))
+            // 1. 自动生成主键（Insert 时 Id 为空或 0）
+            if (entityInfo.OperationType == DataFilterType.InsertByObject
+                && entityInfo.PropertyName == "Id"
+                && (oldValue == null || (oldValue is long l && l == 0)))
             {
-                var propType = entityInfo.EntityColumnInfo?.PropertyInfo?.PropertyType;
-                if (propType == typeof(long))
-                    entityInfo.SetValue(YitIdHelper.NextId());
+                entityInfo.SetValue(YitIdHelper.NextId());
+                return;
             }
-            //inset生效
-            if (_auditTimeFields.Contains(entityInfo.PropertyName) && entityInfo.OperationType == DataFilterType.InsertByObject)
+
+            // 2. Insert：时间字段（CreateTime）
+            if (entityInfo.OperationType == DataFilterType.InsertByObject
+                && _auditTimeFields.Contains(entityInfo.PropertyName))
             {
-                entityInfo.SetValue(DateTime.Now);//修改CreateTime字段
+                entityInfo.SetValue(DateTime.Now);
+                return;
             }
-            if (_auditUserFields.Contains(entityInfo.PropertyName) && entityInfo.OperationType == DataFilterType.InsertByObject)
+
+            // 3. Insert：用户字段（Creator）
+            if (entityInfo.OperationType == DataFilterType.InsertByObject
+                && _auditUserFields.Contains(entityInfo.PropertyName))
             {
-                var currentUser = getCurrentUser();
-                var userId = "0";
-                if (currentUser != null)
-                {
-                    userId = currentUser.UserId;
-                }
-                entityInfo.SetValue(userId);//修改Creator字段
+                entityInfo.SetValue(GetCurrentUserId(httpContextAccessor));
+                return;
             }
-            //update生效
-            if (entityInfo.PropertyName == "ModificationTime" && entityInfo.OperationType == DataFilterType.UpdateByObject)
+
+            // 4. Update：时间字段（ModificationTime）
+            if (entityInfo.OperationType == DataFilterType.UpdateByObject
+                && entityInfo.PropertyName == "ModificationTime")
             {
-                entityInfo.SetValue(DateTime.Now);//修改UpdateTime字段
+                entityInfo.SetValue(DateTime.Now);
+                return;
             }
-            if (entityInfo.PropertyName == "Modifier" && entityInfo.OperationType == DataFilterType.UpdateByObject)
+
+            // 5. Update：用户字段（Modifier）
+            if (entityInfo.OperationType == DataFilterType.UpdateByObject
+                && entityInfo.PropertyName == "Modifier")
             {
-                var currentUser = getCurrentUser();
-                var userId = "0";
-                if (currentUser != null)
-                {
-                    userId = currentUser.UserId;
-                }
-                entityInfo.SetValue(userId);//修改UpdateTime字段
+                entityInfo.SetValue(GetCurrentUserId(httpContextAccessor));
+                return;
             }
-            // delete生效  (软删除)
-            if (entityInfo.PropertyName == "IsDeleted" && entityInfo.OperationType == DataFilterType.DeleteByObject)
+
+            // 6. 软删除
+            if (entityInfo.OperationType == DataFilterType.DeleteByObject
+                && entityInfo.PropertyName == "IsDeleted")
             {
-                entityInfo.SetValue(true);//修改Delete字段
+                entityInfo.SetValue(true);
             }
         };
+
         return db;
+    }
+
+    private static string GetCurrentUserId(IHttpContextAccessor httpContextAccessor)
+    {
+        var httpContext = httpContextAccessor.HttpContext; // ← 每次执行时动态取
+        var currentUser = httpContext?.RequestServices.GetService<ICurrentUser>();
+        if (currentUser == null) return "0";
+        return currentUser.UserId.IsNullOrWhiteSpace() ? "0" : currentUser.UserId;
     }
 
     /// <summary>
     /// 查询过滤
     /// </summary>
-    public static SqlSugarProvider UseQueryFilter(this SqlSugarProvider db)
+    public static ISqlSugarClient UseQueryFilter(this ISqlSugarClient db)
     {
-        db.Context.QueryFilter.AddTableFilter<IBaseFullEntity>(a => a.IsDeleted == false);
+        db.QueryFilter.AddTableFilter<IBaseFullEntity>(a => a.IsDeleted == false);
         return db;
     }
 }

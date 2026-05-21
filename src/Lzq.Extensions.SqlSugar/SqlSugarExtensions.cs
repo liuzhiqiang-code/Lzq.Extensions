@@ -3,8 +3,10 @@ using Lzq.Extensions.SqlSugar.Config;
 using Lzq.Extensions.SqlSugar.Repository;
 using Lzq.Extensions.SqlSugar.SeedData;
 using Masa.BuildingBlocks.Data;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using SqlSugar;
 using System.Reflection;
 using Yitter.IdGenerator;
@@ -16,12 +18,14 @@ public static class SqlSugarExtensions
 
     public static IServiceCollection AddLzqSqlSugar(this IServiceCollection services, IConfiguration configuration)
     {
+        services.AddHttpContextAccessor();
         var idGeneratorOptions = configuration.GetSection("IdGeneratorOptions").Get<Yitter.IdGenerator.IdGeneratorOptions>()
             ?? new Yitter.IdGenerator.IdGeneratorOptions(1);
         YitIdHelper.SetIdGenerator(idGeneratorOptions);
 
         var dBConfigs = configuration.GetSection("DBConfigs").Get<List<DBConfig>>()
             ?? throw new MasaArgumentException("没有配置DBConfigs");
+
         var connectionConfigs = new List<ConnectionConfig>();
         foreach (var item in dBConfigs)
         {
@@ -34,8 +38,20 @@ public static class SqlSugarExtensions
                 ConfigureExternalServices = ConfigureExternalServices,
             });
         }
+
+        // 1. 先注册 IHttpContextAccessor 到容器
+        var sp = services.BuildServiceProvider();
+        var httpContextAccessor = sp.GetRequiredService<IHttpContextAccessor>();
+        var loggerFactory = sp.GetRequiredService<ILoggerFactory>();
+
         // 创建 SqlSugarScope 但不传入初始化回调
-        SqlSugarScope sqlSugar = new SqlSugarScope(connectionConfigs);
+        SqlSugarScope sqlSugar = new SqlSugarScope(connectionConfigs, client =>
+        {
+            // 每个库都生效的 AOP
+            client.UseAuditedField(httpContextAccessor);
+            client.UseSqlLog(sp);
+            client.UseQueryFilter();
+        });
         services.AddSingleton<ISqlSugarClient>(sqlSugar);
 
         // 注册种子数据等
@@ -50,18 +66,8 @@ public static class SqlSugarExtensions
             }
         }
 
-        var serviceProvider = services.BuildServiceProvider();
-
-        foreach (var item in connectionConfigs)
-        {
-            var conn = sqlSugar.GetConnection(item.ConfigId);
-            conn.UseSqlLog(serviceProvider);
-            conn.UseAuditedField(() => MasaApp.GetService<ICurrentUser>());
-            conn.UseQueryFilter();
-        }
-
-        sqlSugar.UseCodeFirst(serviceProvider);
-        sqlSugar.UseSeedData(serviceProvider);
+        sqlSugar.UseCodeFirst(sp);
+        sqlSugar.UseSeedData(sp);
 
         services.AddTransient(typeof(ISqlSugarRepository<>), typeof(SqlSugarRepository<>));
 

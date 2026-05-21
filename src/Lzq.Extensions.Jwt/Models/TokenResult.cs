@@ -2,7 +2,7 @@
 
 namespace Lzq.Extensions.Jwt.Models;
 
-public class TokenViewDto
+public class TokenResult
 {
     [JsonPropertyName("access_token")]
     public string AccessToken { get; set; }

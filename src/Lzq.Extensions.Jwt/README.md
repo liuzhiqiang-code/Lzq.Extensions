@@ -40,8 +40,8 @@ csharp
 ```
 public class AuthService
 {
-    private readonly IJwtService _jwtService;
-    public AuthService(IJwtService jwtService) => _jwtService = jwtService;
+    private readonly ITokenGenerator _tokenGenerator;
+    public AuthService(ITokenGenerator tokenGenerator) => _tokenGenerator = tokenGenerator;
 
     public TokenViewDto Login()
     {
@@ -49,7 +49,7 @@ public class AuthService
             .SetUserId("001")
             .SetUserName("demo")
             .SetRoles(new() { "admin" });
-        return _jwtService.GenerateToken(user, TimeSpan.FromHours(2));
+        return _tokenGenerator.Generate(user, TimeSpan.FromHours(2));
     }
 }
 ```
@@ -74,7 +74,7 @@ public class UserController : ControllerBase
 
 | 接口/类 | 说明                                            |
 | --------- | ------------------------------------------------- |
-| `IJwtService`        | 生成 JWT Token                                  |
+| `ITokenGenerator`        | 生成 JWT Token                                  |
 | `ICurrentUser`        | 获取当前请求用户信息（UserId、Roles、Email 等） |
 | `JwtOption`        | 配置选项，对应配置文件 `Jwt` 节                      |
 

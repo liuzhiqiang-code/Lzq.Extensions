@@ -1,6 +1,7 @@
-﻿using Lzq.Extensions.AI.Interfaces;
+﻿using Lzq.Extensions.AI.AgentSkills;
+using Lzq.Extensions.AI.Factorys;
+using Lzq.Extensions.AI.Interfaces;
 using Lzq.Extensions.AI.Provider;
-using Lzq.Extensions.AI.Services;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.VectorData;
@@ -15,8 +16,12 @@ namespace Lzq.Extensions.AI
             // 注入消息持久化
             services.AddSingleton<VectorStore>(new InMemoryVectorStore());
             services.AddSingleton<ChatHistoryProvider, VectorChatHistoryProvider>();
-            services.AddSingleton<IChatClientService, ChatClientService>();
-            services.AddTransient<IAIAgentService, AIAgentService>();
+            services.AddSingleton<McpToolProvider>();
+            services.AddSingleton<AgentSkillProvider>();
+            services.AddSingleton<ISkillManager, SkillManager>();
+            services.AddSingleton<IChatClientFactory, ChatClientFactory>();
+            services.AddSingleton<IAIAgentFactory, AIAgentFactory>();
+            services.AddSingleton<IAIAgentRunner, AIAgentRunner>();
             return services;
         }
 

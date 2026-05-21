@@ -4,6 +4,7 @@
 		<ImplicitUsings>enable</ImplicitUsings>
 		<Nullable>enable</Nullable>
 		<NoWarn>$(NoWarn);MAAI001</NoWarn>
+		<NoWarn>$(NoWarn);OPENAI001</NoWarn>
 
 		<!-- ===== NuGet 打包配置 ===== -->
 		<PackageId>$(AssemblyName)</PackageId>
@@ -27,6 +28,8 @@
 		<PackageReference Include="Microsoft.Agents.AI" Version="1.*" />
 		<PackageReference Include="Microsoft.Agents.AI.OpenAI" Version="1.*" />
 		<PackageReference Include="Microsoft.Agents.AI.Workflows" Version="1.*" />
+
+		<PackageReference Include="ModelContextProtocol" Version="1.3.0" />
 
 		<PackageReference Include="Microsoft.SemanticKernel.Connectors.InMemory" Version="1.67.1-preview" />
 		<PackageReference Include="OllamaSharp" Version="5.4.23" />

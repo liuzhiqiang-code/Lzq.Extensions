@@ -1,4 +1,5 @@
-﻿using Lzq.Extensions.AI.AgentSkills;
+﻿using Lzq.Extensions.AI;
+using Lzq.Extensions.AI.AgentSkills;
 using Lzq.Extensions.AI.Consts;
 using Lzq.Extensions.AI.Interfaces;
 using Microsoft.Agents.AI;
@@ -11,37 +12,53 @@ using System.Text;
 namespace Lzq.Extensions.WebApi.Services;
 
 /// <summary>
-/// 各种并发情况下事务完整性的测试用例
+/// AI 服务测试用例
 /// </summary>
 public class AIService : ServiceBase
 {
     private ILogger<AIService>? Logger => GetService<ILogger<AIService>>();
-    private IChatClientService ChatClientService => GetRequiredService<IChatClientService>();
-    private IAIAgentService AIAgentService => GetRequiredService<IAIAgentService>();
+    private IAIAgentRunner AIAgentRunner => GetRequiredService<IAIAgentRunner>();
+    private IAIAgentFactory AIAgentFactory => GetRequiredService<IAIAgentFactory>();
     private AgentSkillProvider AgentSkillProvider => GetRequiredService<AgentSkillProvider>();
     private IConfiguration Configuration => GetRequiredService<IConfiguration>();
 
     public AIService() : base("/api/v1/test") { }
+
+    #region 基础对话
 
     [AllowAnonymous]
     [OpenApiTag("AI", Description = "对话补全")]
     [RoutePattern(pattern: "completion", true)]
     public async Task<ApiResult> CompletionAsync()
     {
-        var setting = ChatClientConst.DeepSeek_V4_Flash;
+        var setting = ChatClientConst.DeepSeek_V32;
         setting.KeySecret = Configuration.GetSection("AIKeySecret:SiliconFlow").Get<string>() ?? "";
-        var agent = AIAgentService.CreateAIAgent(setting, new AIAgentModel
+        var agentModel = new AIAgentModel
         {
             Name = "简单对话助手"
+        };
+
+        // 第一轮：自我介绍
+        var (response1, sessionDbKey) = await AIAgentRunner.RunAsync(setting, agentModel, "我叫Mike，今年25岁。", null);
+
+        // 第二轮：带记忆追问
+        var (response2, _) = await AIAgentRunner.RunAsync(setting, agentModel, "我叫什么名字", sessionDbKey);
+
+        // 第三轮：继续追问
+        var (response3, _) = await AIAgentRunner.RunAsync(setting, agentModel, "我今年多大", sessionDbKey);
+
+        return ApiResult.Success(new
+        {
+            Round1 = response1.Text,
+            Round2 = response2.Text,
+            Round3 = response3.Text,
+            SessionDbKey = sessionDbKey
         });
-
-        var (text, sessionDbKey) = await AIAgentService.RunAsync(agent, "我叫Mike，今年25岁。", null);
-
-        (text, sessionDbKey) = await AIAgentService.RunAsync(agent, "我叫什么名字", sessionDbKey);
-        (text, sessionDbKey) = await AIAgentService.RunAsync(agent, "我今年多大", sessionDbKey);
-
-        return ApiResult.Success();
     }
+
+    #endregion
+
+    #region 带技能的对话
 
     [AllowAnonymous]
     [OpenApiTag("AI", Description = "对话补全, 带技能")]
@@ -55,15 +72,16 @@ public class AIService : ServiceBase
         var skillCount = allSkills.Count();
         Logger?.LogInformation("已注册技能总数: {Count}", skillCount);
 
-        var agent = CreateWorkOrderAgent();
+        // 2. 创建 Agent（复用同一个实例）
+        var agent = await AIAgentFactory.CreateAsync(GetSetting(), CreateWorkOrderAgentModel());
 
         // ==================== 场景一：查询单个工单进度 ====================
         try
         {
-            var updates = new List<AgentResponseUpdate>();
             var textBuilder = new StringBuilder();
+            var updates = new List<AgentResponseUpdate>();
 
-            await foreach (var update in AIAgentService.RunStreamingUpdatesAsync(
+            await foreach (var update in AIAgentRunner.RunStreamingUpdatesAsync(
                 agent, "WO-20260510-001 的工单进度怎么样？"))
             {
                 updates.Add(update);
@@ -98,7 +116,7 @@ public class AIService : ServiceBase
             var textBuilder = new StringBuilder();
             int updateCount = 0;
 
-            await foreach (var update in AIAgentService.RunStreamingUpdatesAsync(
+            await foreach (var update in AIAgentRunner.RunStreamingUpdatesAsync(
                 agent, "有哪些待处理的工单？"))
             {
                 updateCount++;
@@ -133,7 +151,7 @@ public class AIService : ServiceBase
             var textBuilder = new StringBuilder();
             int updateCount = 0;
 
-            await foreach (var update in AIAgentService.RunStreamingUpdatesAsync(
+            await foreach (var update in AIAgentRunner.RunStreamingUpdatesAsync(
                 agent, "张伟负责哪些工单？"))
             {
                 updateCount++;
@@ -168,7 +186,7 @@ public class AIService : ServiceBase
             var textBuilder = new StringBuilder();
 
             // 第一轮：查询工单
-            var (answer1, sessionDbKey) = await AIAgentService.RunStreamingAsync(
+            var (answer1, sessionDbKey) = await AIAgentRunner.RunStreamingAsync(
                 agent,
                 "帮我查一下 WO-20260510-001 的进度",
                 async (chunk) => { textBuilder.Append(chunk); });
@@ -176,7 +194,7 @@ public class AIService : ServiceBase
             textBuilder.Clear();
 
             // 第二轮：基于上下文追问（复用 sessionDbKey）
-            var (answer2, _) = await AIAgentService.RunStreamingAsync(
+            var (answer2, _) = await AIAgentRunner.RunStreamingAsync(
                 agent,
                 "这个工单状态是什么意思？",
                 async (chunk) => { textBuilder.Append(chunk); },
@@ -214,16 +232,198 @@ public class AIService : ServiceBase
         });
     }
 
-    /// <summary>
-    /// 创建工单小助手 Agent（每个场景独立调用）
-    /// </summary>
-    private AIAgent CreateWorkOrderAgent()
+    #endregion
+
+    #region 流式回调演示
+
+    [AllowAnonymous]
+    [OpenApiTag("AI", Description = "流式回调演示（思考/工具调用/文本）")]
+    [RoutePattern(pattern: "streamingWithCallback", true)]
+    public async Task<ApiResult> StreamingWithCallbackAsync()
     {
-        var setting = ChatClientConst.DeepSeek_V4_Flash;
-        setting.KeySecret = Configuration.GetSection("AIKeySecret:SiliconFlow").Get<string>() ?? "";
-        var agent = AIAgentService.CreateAIAgent(setting, new AIAgentModel
+        var agent = await AIAgentFactory.CreateAsync(GetSetting(), CreateWorkOrderAgentModel());
+
+        var events = new List<StreamingEvent>();
+        var fullText = new StringBuilder();
+
+        var (text, sessionDbKey) = await AIAgentRunner.RunStreamingAsync(
+            agent,
+            "帮我查一下 WO-20260510-001 的工单进度，然后告诉我接下来该怎么做",
+            async (args) =>
+            {
+                switch (args.EventType)
+                {
+                    case StreamingEventType.Thinking:
+                        events.Add(new StreamingEvent
+                        {
+                            Type = "Thinking",
+                            Content = args.Content,
+                            Timestamp = DateTime.Now
+                        });
+                        break;
+
+                    case StreamingEventType.TextChunk:
+                        events.Add(new StreamingEvent
+                        {
+                            Type = "TextChunk",
+                            Content = args.Content,
+                            Timestamp = DateTime.Now
+                        });
+                        break;
+
+                    case StreamingEventType.ToolCallStart:
+                        events.Add(new StreamingEvent
+                        {
+                            Type = "ToolCallStart",
+                            CallId = args.CallId,
+                            ToolName = args.ToolName,
+                            Content = args.ToolArguments,
+                            Timestamp = DateTime.Now
+                        });
+                        break;
+
+                    case StreamingEventType.ToolCallEnd:
+                        events.Add(new StreamingEvent
+                        {
+                            Type = "ToolCallEnd",
+                            CallId = args.CallId,
+                            ToolName = args.ToolName,
+                            Content = args.ToolResult,
+                            Timestamp = DateTime.Now
+                        });
+                        break;
+                }
+            });
+
+        return ApiResult.Success(new
         {
-            Name = $"工单小助手",
+            FullText = text,
+            SessionDbKey = sessionDbKey,
+            TotalEvents = events.Count,
+            Events = events
+        });
+    }
+
+    /// <summary>
+    /// 流式事件记录
+    /// </summary>
+    public class StreamingEvent
+    {
+        public string Type { get; set; } = string.Empty;
+        public string? Content { get; set; }
+        public string? CallId { get; set; }
+        public string? ToolName { get; set; }
+        public DateTime Timestamp { get; set; }
+    }
+
+    #endregion
+
+    #region MCP 对话
+
+    [AllowAnonymous]
+    [OpenApiTag("AI", Description = "对话补全, Mcp")]
+    [RoutePattern(pattern: "completionWithMcp", true)]
+    public async Task<ApiResult> CompletionWithMcpAsync()
+    {
+        var result = new List<SkillDemoResult>();
+        var agent = await AIAgentFactory.CreateAsync(GetSetting(), CreateMcpAgentModel());
+        var question = "请总结与 MCP 工具调用相关的 Azure AI Agent 文档内容?";
+
+        try
+        {
+            var (response, sessionDbKey) = await AIAgentRunner.RunAsync(agent, question);
+
+            result.Add(new SkillDemoResult
+            {
+                Scene = "调用Mcp工具",
+                Question = question,
+                Answer = response.Text,
+                Success = true,
+            });
+        }
+        catch (Exception ex)
+        {
+            Logger?.LogError(ex, "Mcp场景执行失败");
+            result.Add(new SkillDemoResult
+            {
+                Scene = "调用Mcp工具",
+                Question = question,
+                Answer = $"失败: {ex.Message}",
+                Success = false,
+            });
+        }
+
+        return ApiResult.Success(new
+        {
+            Results = result,
+            TotalScenes = result.Count,
+            SuccessCount = result.Count(r => r.Success),
+            FailCount = result.Count(r => !r.Success),
+        });
+    }
+
+    #endregion
+
+    #region 语音转文字
+
+    [AllowAnonymous]
+    [OpenApiTag("AiChats"), OpenApiOperation("语音转文字", "")]
+    [RoutePattern(pattern: "speech-to-text", true)]
+    public async Task<ApiResult> SpeechToTextAsync(HttpRequest request)
+    {
+        var form = await request.ReadFormAsync();
+        var formFile = form.Files["file"];
+        if (formFile == null || formFile.Length == 0)
+        {
+            throw new UserFriendlyException("未找到上传的音频文件");
+        }
+
+        if (formFile.Length > 25 * 1024 * 1024)
+        {
+            throw new UserFriendlyException("文件大小超过 25MB 限制");
+        }
+
+        using var httpClient = new HttpClient();
+        var keySecret = Configuration.GetSection("AIKeySecret:SiliconFlow").Get<string>() ?? "";
+        httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", keySecret);
+
+        using var httpForm = new MultipartFormDataContent();
+        var fileContent = new StreamContent(formFile.OpenReadStream());
+        fileContent.Headers.ContentType = new MediaTypeHeaderValue(formFile.ContentType);
+        httpForm.Add(fileContent, "file", formFile.FileName);
+        httpForm.Add(new StringContent("FunAudioLLM/SenseVoiceSmall"), "model");
+
+        var response = await httpClient.PostAsync("https://api.siliconflow.cn/v1/audio/transcriptions", httpForm);
+        var result = await response.Content.ReadAsStringAsync();
+        return ApiResult.Success(result);
+    }
+
+    #endregion
+
+    #region 私有方法
+
+    /// <summary>
+    /// 获取通用 Setting
+    /// </summary>
+    private AISetting GetSetting()
+    {
+        return new AISetting
+        {
+            ConfigId = ChatClientConst.MiniMaxM25.ConfigId,
+            Url = ChatClientConst.MiniMaxM25.Url,
+            KeySecret = Configuration.GetSection("AIKeySecret:SiliconFlow").Get<string>() ?? "",
+            Model = ChatClientConst.MiniMaxM25.Model
+        };
+    }
+
+    /// <summary>
+    /// 创建工单 Agent 配置
+    /// </summary>
+    private AIAgentModel CreateWorkOrderAgentModel()
+    {
+        return new AIAgentModel
+        {
+            Name = "工单小助手",
             ChatOptions = new ChatOptions
             {
                 Instructions = "你是一个专业的工单管理助手。请根据用户的问题，合理使用工单查询技能来提供帮助。",
@@ -235,55 +435,34 @@ public class AIService : ServiceBase
                     SkillName = "work-order-demo",
                 }
             },
-        });
-
-        Logger?.LogInformation("创建 Agent: {Name}", agent.Name);
-        return agent;
+        };
     }
 
-    [AllowAnonymous]
-    [OpenApiTag("AiChats"), OpenApiOperation("语音转文字", "")]
-    [RoutePattern(pattern: "speech-to-text", true)]
-    public async Task<ApiResult> SpeechToTextAsync(HttpRequest request)
+    /// <summary>
+    /// 创建 MCP Agent 配置
+    /// </summary>
+    private AIAgentModel CreateMcpAgentModel()
     {
-        // 1. 获取上传文件
-        var form = await request.ReadFormAsync();
-        var formFile = form.Files["file"];
-        if (formFile == null || formFile.Length == 0)
+        return new AIAgentModel
         {
-            throw new UserFriendlyException("未找到上传的音频文件");
-        }
-
-        // 2. 校验文件（保持原样）
-        if (formFile.Length > 25 * 1024 * 1024)
-        {
-            throw new UserFriendlyException("文件大小超过 25MB 限制");
-        }
-
-        // 3. 读取文件为字节数组
-        byte[] audioBytes;
-        using (var ms = new MemoryStream())
-        {
-            await formFile.CopyToAsync(ms);
-            audioBytes = ms.ToArray();
-        }
-
-        using var httpClient = new HttpClient();
-        var keySecret = Configuration.GetSection("AIKeySecret:SiliconFlow").Get<string>() ?? "";
-        httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", keySecret);
-
-        using var httpForm = new MultipartFormDataContent();
-        // 直接使用 IFormFile 的流
-        var fileContent = new StreamContent(formFile.OpenReadStream());
-        fileContent.Headers.ContentType = new MediaTypeHeaderValue(formFile.ContentType);
-        httpForm.Add(fileContent, "file", formFile.FileName);
-        //httpForm.Add(new StringContent("FunAudioLLM/SenseVoiceSmall"), "model");
-        httpForm.Add(new StringContent("FunAudioLLM/SenseVoiceSmall"), "model");
-
-        var response = await httpClient.PostAsync("https://api.siliconflow.cn/v1/audio/transcriptions", httpForm);
-        var result = await response.Content.ReadAsStringAsync();
-        return ApiResult.Success(result);
+            Name = "Mcp小助手",
+            ChatOptions = new ChatOptions
+            {
+                Instructions = "You answer questions by searching the Microsoft Learn content only.",
+            },
+            SelectedMcpModels = new List<McpModel>
+            {
+                new McpModel
+                {
+                    Name = "microsoft_learn",
+                    Url = "https://learn.microsoft.com/api/mcp",
+                    AllowedTools = new List<string> { "microsoft_docs_search" }
+                }
+            },
+        };
     }
+
+    #endregion
 
     /// <summary>
     /// 技能演示结果 DTO

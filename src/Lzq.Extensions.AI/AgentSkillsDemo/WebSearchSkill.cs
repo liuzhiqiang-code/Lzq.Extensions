@@ -11,7 +11,7 @@ namespace Lzq.Extensions.AI.AgentSkillsDemo;
 /// <summary>
 /// 网络搜索技能 —— 提供搜索引擎查询和网页内容抓取能力。
 /// </summary>
-[GeneralSkill]
+// [GeneralSkill]
 public class WebSearchSkill : LzqAgentSkillBase<WebSearchSkill>
 {
     // 搜索引擎模板（只读，无需修改）

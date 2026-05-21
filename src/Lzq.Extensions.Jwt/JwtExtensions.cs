@@ -35,8 +35,8 @@ public static class JwtExtensions
 
         // 注册服务
         services.AddHttpContextAccessor();
-        services.AddTransient<IJwtService, JwtService>();
-        services.AddTransient<ICurrentUser, CurrentUser>();
+        services.AddSingleton<ITokenGenerator, TokenGenerator>();
+        services.AddScoped<ICurrentUser, CurrentUser>();
 
         // 使用 IOptions<JwtOptions> 配置 JwtBearer
         services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)

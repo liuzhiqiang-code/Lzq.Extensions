@@ -3,7 +3,7 @@ using Lzq.Extensions.Jwt.Models;
 
 namespace Lzq.Extensions.Jwt.Services;
 
-public interface IJwtService
+public interface ITokenGenerator
 {
-    TokenViewDto GenerateToken(ICurrentUser user, TimeSpan timeSpan);
+    TokenResult Generate(ICurrentUser user, TimeSpan expiresIn);
 }

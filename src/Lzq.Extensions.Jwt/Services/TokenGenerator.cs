@@ -6,9 +6,9 @@ using System.Security.Claims;
 
 namespace Lzq.Extensions.Jwt.Services;
 
-public class JwtService : IJwtService
+public class TokenGenerator : ITokenGenerator
 {
-    public TokenViewDto GenerateToken(ICurrentUser user, TimeSpan timeSpan)
+    public TokenResult Generate(ICurrentUser user, TimeSpan timeSpan)
     {
         var claim = new Claim[]
             {
@@ -23,7 +23,7 @@ public class JwtService : IJwtService
                 new Claim(JwtRegisteredClaimNames.Sid, user.Sid), // Token唯一标识
             };
         var accessToken = JwtUtils.CreateToken(claim, timeSpan);
-        return new TokenViewDto
+        return new TokenResult
         {
             AccessToken = accessToken,
             TokenType = "Bearer",

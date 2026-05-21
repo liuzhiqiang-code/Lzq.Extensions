@@ -1,6 +1,5 @@
 using Lzq.Core;
 using Lzq.Extensions.AI;
-using Lzq.Extensions.AI.AgentSkills;
 using Lzq.Extensions.ExternalHttpApi;
 using Lzq.Extensions.Jwt;
 using Lzq.Extensions.NSwag;
@@ -34,8 +33,7 @@ builder.Services.AddLzqJwt(builder.Configuration, options =>
 });
 
 builder.Services.AddLzqAI()
-    .AddSqlSugarChatHistoryProvider()
-    .AddLzqAgentSkills();
+    .AddSqlSugarChatHistoryProvider();
 
 builder.Services.AddLzqSqlSugar(builder.Configuration);
 

@@ -3,7 +3,7 @@ using SqlSugar;
 
 namespace Lzq.Extensions.AI.Provider;
 
-[Tenant("AgentForge"), SugarTable("msm_ai_chat_history")]
+[Tenant("AgentForge"), SugarTable("ai_chat_history")]
 public class AIChatHistoryEntity : BaseFullEntity
 {
     [SugarColumn(ColumnName = "key")]
@@ -18,8 +18,8 @@ public class AIChatHistoryEntity : BaseFullEntity
     [SugarColumn(ColumnName = "role")]
     public string Role { get; internal set; }
 
-    [SugarColumn(ColumnName = "content", ColumnDataType = "text")]
-    public string? Content { get; set; }
+    [SugarColumn(ColumnName = "content", ColumnDataType = "text", IsJson = true)]
+    public List<StreamingEventArgs>? Content { get; set; }
 
     [SugarColumn(ColumnName = "serialized_message", ColumnDataType = "text")]
     public string? SerializedMessage { get; set; }

@@ -10,7 +10,7 @@ using System.Text;
 using System.Text.Json;
 using Xunit;
 
-namespace Lzq.Extensions.EventBus.Tests;
+namespace Lzq.Extensions.EventBus.RabbitMq.Tests;
 
 public class RabbitMqPublisherTests : IDisposable
 {

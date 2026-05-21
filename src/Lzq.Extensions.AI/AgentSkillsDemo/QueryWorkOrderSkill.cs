@@ -8,7 +8,7 @@ namespace Lzq.Extensions.AI.AgentSkillsDemo;
 /// <summary>
 /// 工单查询技能 —— 演示如何通过 AgentSkillScript 提供动态查询能力
 /// </summary>
-[GeneralSkill]
+// [GeneralSkill]
 public class QueryWorkOrderSkill : LzqAgentSkillBase<QueryWorkOrderSkill>
 {
     // ==================== 假数据 ====================
