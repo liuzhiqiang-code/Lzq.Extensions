@@ -1,9 +1,9 @@
-﻿using Microsoft.Agents.AI;
+﻿using Lzq.Extensions.AI.AgentSkills;
+using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using SqlSugar;
 using System.Text;
 using System.Text.Json;
-using static System.Net.Mime.MediaTypeNames;
 
 namespace Lzq.Extensions.AI.Provider;
 
@@ -12,9 +12,11 @@ public sealed class SqlSugarChatHistoryProvider : ChatHistoryProvider
     private readonly ProviderSessionState<State> _sessionState;
     private IReadOnlyList<string>? _stateKeys;
     private readonly ISqlSugarClient _sqlSugarClient;
+    private readonly AgentSkillProvider _skillProvider;
 
     public SqlSugarChatHistoryProvider(
         ISqlSugarClient sqlSugarClient,
+        AgentSkillProvider skillProvider,
         Func<AgentSession?, State>? stateInitializer = null,
         string? stateKey = null)
     {
@@ -22,6 +24,7 @@ public sealed class SqlSugarChatHistoryProvider : ChatHistoryProvider
             stateInitializer ?? (_ => new State(Guid.NewGuid().ToString("N"))),
             stateKey ?? GetType().Name);
         _sqlSugarClient = sqlSugarClient ?? throw new ArgumentNullException(nameof(sqlSugarClient));
+        _skillProvider = skillProvider;
     }
 
     public override IReadOnlyList<string> StateKeys => _stateKeys ??= [_sessionState.StateKey];
@@ -81,6 +84,12 @@ public sealed class SqlSugarChatHistoryProvider : ChatHistoryProvider
         var allNewMessages = context.RequestMessages.Concat(context.ResponseMessages ?? []).ToList();
         if (allNewMessages.Count == 0) return;
 
+        // 建立本批次消息中的 CallId -> ToolName 映射
+        var callIdToFuncCallMap = allNewMessages
+            .SelectMany(m => m.Contents ?? [])
+            .OfType<FunctionCallContent>()
+            .ToDictionary(f => f.CallId, f => f);
+
         // 确定当前轮次编号
         int currentTurnId;
         if (allNewMessages[0].Role == ChatRole.User)
@@ -105,7 +114,7 @@ public sealed class SqlSugarChatHistoryProvider : ChatHistoryProvider
                 SessionId = state.SessionDbKey,
                 TurnId = currentTurnId,
                 Role = role,
-                Content = ParseContent(msg),           // 解析 Contents 存到 Content
+                Content = ParseContent(msg, callIdToFuncCallMap),           // 解析 Contents 存到 Content
                 SerializedMessage = JsonSerializer.Serialize(msg)
             };
         }).ToList();
@@ -117,7 +126,7 @@ public sealed class SqlSugarChatHistoryProvider : ChatHistoryProvider
     /// <summary>
     /// 根据 ChatMessage.Contents 类型解析出有意义的文本内容
     /// </summary>
-    private static List<StreamingEventArgs>? ParseContent(ChatMessage msg)
+    private List<StreamingEventArgs>? ParseContent(ChatMessage msg, Dictionary<string, FunctionCallContent> callIdToFuncCallMap)
     {
         var parts = new List<StreamingEventArgs>();
         var textBuilder = new StringBuilder();
@@ -125,25 +134,56 @@ public sealed class SqlSugarChatHistoryProvider : ChatHistoryProvider
 
         foreach (var content in msg.Contents ?? [])
         {
+            SkillCategory category;
             switch (content)
             {
                 case FunctionCallContent funcCall:
-                    parts.Add(new StreamingEventArgs
+                    category = _skillProvider.GetCategoryByToolName(funcCall.Arguments?["skillName"]?.ToString() ?? "");
+                    if (category == SkillCategory.Visual && funcCall?.Name.Equals("run_skill_script") == true)
                     {
-                        EventType = StreamingEventType.ToolCallStart,
-                        CallId = funcCall.CallId,
-                        ToolName = funcCall.Name,
-                        ToolArguments = funcCall.Arguments?.ToJson()
-                    });
+                        parts.Add(new StreamingEventArgs
+                        {
+                            EventType = StreamingEventType.EchartsStart,
+                            CallId = funcCall.CallId,
+                            ToolName = funcCall.Name,
+                            ToolArguments = funcCall.Arguments?.ToJson()
+                        });
+                    }
+                    else
+                    {
+                        parts.Add(new StreamingEventArgs
+                        {
+                            EventType = StreamingEventType.ToolCallStart,
+                            CallId = funcCall.CallId,
+                            ToolName = funcCall.Name,
+                            ToolArguments = funcCall.Arguments?.ToJson()
+                        });
+                    }
                     break;
 
                 case FunctionResultContent funcResult:
-                    parts.Add(new StreamingEventArgs
+                    callIdToFuncCallMap.TryGetValue(funcResult.CallId, out var funcCallObj);
+                    category = _skillProvider.GetCategoryByToolName(funcCallObj?.Arguments?["skillName"]?.ToString() ?? "");
+                    if (category == SkillCategory.Visual && funcCallObj?.Name.Equals("run_skill_script") == true)
                     {
-                        EventType = StreamingEventType.ToolCallEnd,
-                        CallId = funcResult.CallId,
-                        ToolResult = funcResult.Result?.ToString()
-                    });
+                        parts.Add(new StreamingEventArgs
+                        {
+                            EventType = StreamingEventType.EchartsEnd,
+                            CallId = funcResult.CallId,
+                            ToolName = funcCallObj?.Name,
+                            ToolResult = funcResult.Result?.ToString()
+                        });
+                    }
+                    else
+                    {
+                        parts.Add(new StreamingEventArgs
+                        {
+                            EventType = StreamingEventType.ToolCallEnd,
+                            CallId = funcResult.CallId,
+                            ToolName = funcCallObj?.Name,
+                            ToolResult = funcResult.Result?.ToString()
+                        });
+                    }
                     break;
 
                 case TextContent text:

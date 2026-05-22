@@ -64,7 +64,7 @@ public static class SqlSugarProviderExtension
             var type = initializer.GetType();
             try
             {
-                initializer.Initialize(db);
+                initializer.Initialize(db, logger);
                 logger.LogInformation("种子数据 {TypeName} 执行成功", type.FullName);
             }
             catch (Exception ex)

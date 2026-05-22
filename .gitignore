@@ -268,3 +268,5 @@ MigrationBackup/
 
 dockercompose/consul
 dockercompose/rabbitmq
+
+.opencode

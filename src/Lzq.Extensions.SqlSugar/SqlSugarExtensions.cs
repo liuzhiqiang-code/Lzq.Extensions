@@ -1,5 +1,4 @@
-﻿using Lzq.Core.Interfaces;
-using Lzq.Extensions.SqlSugar.Config;
+﻿using Lzq.Extensions.SqlSugar.Config;
 using Lzq.Extensions.SqlSugar.Repository;
 using Lzq.Extensions.SqlSugar.SeedData;
 using Masa.BuildingBlocks.Data;
@@ -15,7 +14,6 @@ namespace Lzq.Extensions.SqlSugar;
 
 public static class SqlSugarExtensions
 {
-
     public static IServiceCollection AddLzqSqlSugar(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddHttpContextAccessor();
@@ -39,8 +37,21 @@ public static class SqlSugarExtensions
             });
         }
 
+        // 注册种子数据等
+        var assemblies = MasaApp.GetAssemblies();
+        foreach (var assembly in assemblies)
+        {
+            var seedTypes = assembly.GetTypes()
+                .Where(t => t.IsClass && !t.IsAbstract && typeof(ISeedDataInitializer).IsAssignableFrom(t));
+            foreach (var type in seedTypes)
+            {
+                services.AddTransient(typeof(ISeedDataInitializer), type);
+            }
+        }
+
         // 1. 先注册 IHttpContextAccessor 到容器
         var sp = services.BuildServiceProvider();
+
         var httpContextAccessor = sp.GetRequiredService<IHttpContextAccessor>();
         var loggerFactory = sp.GetRequiredService<ILoggerFactory>();
 
@@ -53,18 +64,6 @@ public static class SqlSugarExtensions
             client.UseQueryFilter();
         });
         services.AddSingleton<ISqlSugarClient>(sqlSugar);
-
-        // 注册种子数据等
-        var assemblies = MasaApp.GetAssemblies();
-        foreach (var assembly in assemblies)
-        {
-            var seedTypes = assembly.GetTypes()
-                .Where(t => t.IsClass && !t.IsAbstract && typeof(ISeedDataInitializer).IsAssignableFrom(t));
-            foreach (var type in seedTypes)
-            {
-                services.AddTransient(typeof(ISeedDataInitializer), type);
-            }
-        }
 
         sqlSugar.UseCodeFirst(sp);
         sqlSugar.UseSeedData(sp);

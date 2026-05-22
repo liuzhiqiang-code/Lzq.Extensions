@@ -44,7 +44,10 @@ public enum StreamingEventType
     Thinking,       // 思考中
     TextChunk,      // 普通文本片段
     ToolCallStart,  // 工具调用开始
-    ToolCallEnd     // 工具调用结束
+    ToolCallEnd,    // 工具调用结束
+    EchartsStart,   // Echarts 渲染开始
+    EchartsEnd      // Echarts 渲染结束
+
 }
 
 /// <summary>

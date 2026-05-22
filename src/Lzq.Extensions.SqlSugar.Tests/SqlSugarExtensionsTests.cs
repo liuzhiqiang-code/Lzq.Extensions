@@ -2,6 +2,7 @@
 using global::Lzq.Extensions.SqlSugar.Repository;
 using global::Lzq.Extensions.SqlSugar.SeedData;
 using global::SqlSugar;
+using Lzq.Extensions.SqlSugar.Entities;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -98,11 +99,8 @@ public class SqlSugarExtensionsTests : IDisposable
     #region 实体映射测试
 
     [SugarTable("test_users")]
-    public class TestUser
+    public class TestUser : BaseFullEntity
     {
-        [SugarColumn(IsPrimaryKey = true)]
-        public long Id { get; set; }
-
         [SugarColumn(IsNullable = true)]
         public string? Nickname { get; set; }
 
@@ -314,24 +312,20 @@ public class SqlSugarExtensionsTests : IDisposable
 
     #region SeedData 测试
 
-    public class TestSeedData : ISeedDataInitializer
+    public class TestSeedData : BaseSeedData<TestUser>
     {
-        public bool IsCheckTableExists => true;
-
-        public void Initialize(ISqlSugarClient db)
+        public override List<TestUser> GetSeedData()
         {
-            var conn = db.AsTenant().GetConnection("master");
-            conn.CodeFirst.InitTables<TestUser>();
-
-            if (!conn.Queryable<TestUser>().Any())
+            return new List<TestUser>
             {
-                conn.Insertable(new TestUser
+                new TestUser
                 {
                     Id = YitIdHelper.NextId(),
                     UserName = "SeedUser",
                     Age = 99,
-                }).ExecuteCommand();
-            }
+                    IsActive = true,
+                }
+            };
         }
     }
 
@@ -341,13 +335,11 @@ public class SqlSugarExtensionsTests : IDisposable
         InitDatabase();
         // Arrange
         var db = _sqlSugarClient.AsTenant().GetConnection("master");
-        db.DbMaintenance.CreateDatabase();
-
-        var seed = new TestSeedData();
 
         // Act
-        seed.Initialize(_sqlSugarClient);
-
+        db.UseCodeFirst(_serviceProvider);
+        db.UseSeedData(_serviceProvider);
+        
         // Assert
         var user = db.Queryable<TestUser>()
             .Where(u => u.UserName == "SeedUser")

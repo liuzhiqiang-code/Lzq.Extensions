@@ -318,6 +318,100 @@ public class AIService : ServiceBase
 
     #endregion
 
+    #region 流式回调演示
+
+    [AllowAnonymous]
+    [OpenApiTag("AI", Description = "流式回调演示（思考/工具调用/文本/图表）")]
+    [RoutePattern(pattern: "streamingWithEcharts", true)]
+    public async Task<ApiResult> StreamingWithEchartsAsync()
+    {
+        var agent = await AIAgentFactory.CreateAsync(GetSetting(), CreateChartAgentModel());
+
+        var events = new List<StreamingEvent>();
+        var fullText = new StringBuilder();
+
+        var (text, sessionDbKey) = await AIAgentRunner.RunStreamingAsync(
+            agent,
+            "帮我生成一个0到6月随机数的折线图",
+            async (args) =>
+            {
+                switch (args.EventType)
+                {
+                    case StreamingEventType.Thinking:
+                        events.Add(new StreamingEvent
+                        {
+                            Type = "Thinking",
+                            Content = args.Content,
+                            Timestamp = DateTime.Now
+                        });
+                        break;
+
+                    case StreamingEventType.TextChunk:
+                        events.Add(new StreamingEvent
+                        {
+                            Type = "TextChunk",
+                            Content = args.Content,
+                            Timestamp = DateTime.Now
+                        });
+                        break;
+
+                    case StreamingEventType.ToolCallStart:
+                        events.Add(new StreamingEvent
+                        {
+                            Type = "ToolCallStart",
+                            CallId = args.CallId,
+                            ToolName = args.ToolName,
+                            Content = args.ToolArguments,
+                            Timestamp = DateTime.Now
+                        });
+                        break;
+
+                    case StreamingEventType.ToolCallEnd:
+                        events.Add(new StreamingEvent
+                        {
+                            Type = "ToolCallEnd",
+                            CallId = args.CallId,
+                            ToolName = args.ToolName,
+                            Content = args.ToolResult,
+                            Timestamp = DateTime.Now
+                        });
+                        break;
+
+                    case StreamingEventType.EchartsStart:
+                        events.Add(new StreamingEvent
+                        {
+                            Type = "EchartsStart",
+                            CallId = args.CallId,
+                            ToolName = args.ToolName,
+                            Content = args.ToolArguments,
+                            Timestamp = DateTime.Now
+                        });
+                        break;
+
+                    case StreamingEventType.EchartsEnd:
+                        events.Add(new StreamingEvent
+                        {
+                            Type = "EchartsEnd",
+                            CallId = args.CallId,
+                            ToolName = args.ToolName,
+                            Content = args.ToolResult,
+                            Timestamp = DateTime.Now
+                        });
+                        break;
+                }
+            });
+
+        return ApiResult.Success(new
+        {
+            FullText = text,
+            SessionDbKey = sessionDbKey,
+            TotalEvents = events.Count,
+            Events = events
+        });
+    }
+
+    #endregion
+
     #region MCP 对话
 
     [AllowAnonymous]
@@ -433,6 +527,28 @@ public class AIService : ServiceBase
                 new SkillMethodEntry
                 {
                     SkillName = "work-order-demo",
+                }
+            },
+        };
+    }
+
+    /// <summary>
+    /// 创建图表 Agent 配置
+    /// </summary>
+    private AIAgentModel CreateChartAgentModel()
+    {
+        return new AIAgentModel
+        {
+            Name = "图表小助手",
+            ChatOptions = new ChatOptions
+            {
+                Instructions = "你是一个专业助手。当用户要求生成图表时，请优先使用 'generic-data-analyzer' 技能。调用后，请等待工具结果，并将数据展示为Echats图表配置json。",
+            },
+            SelectedSkills = new List<SkillMethodEntry>
+            {
+                new SkillMethodEntry
+                {
+                    SkillName = "generic-data-analyzer",
                 }
             },
         };

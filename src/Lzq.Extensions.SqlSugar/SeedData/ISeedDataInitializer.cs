@@ -1,4 +1,5 @@
-﻿using SqlSugar;
+﻿using Microsoft.Extensions.Logging;
+using SqlSugar;
 
 namespace Lzq.Extensions.SqlSugar.SeedData;
 
@@ -7,5 +8,5 @@ namespace Lzq.Extensions.SqlSugar.SeedData;
 /// </summary>
 public interface ISeedDataInitializer
 {
-    void Initialize(ISqlSugarClient db);
+    void Initialize(ISqlSugarClient db, ILogger logger);
 }
