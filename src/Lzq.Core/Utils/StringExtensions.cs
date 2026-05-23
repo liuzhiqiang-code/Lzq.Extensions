@@ -1,4 +1,4 @@
-﻿namespace Lzq.Core.Utils;
+﻿namespace System;
 
 public static class StringExtensions
 {

@@ -1,80 +1,34 @@
 using Lzq.Core;
+using Lzq.Core.Modules;
 using Lzq.Extensions.AI;
 using Lzq.Extensions.ExternalHttpApi;
 using Lzq.Extensions.Jwt;
 using Lzq.Extensions.NSwag;
 using Lzq.Extensions.SqlSugar;
+using Lzq.Extensions.WebApi;
+using Lzq.Extensions.Serilog;
+
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddCoreAssembly().AddMapster().AddCoreAutoInject();
+builder.AddLzqSerilog();
 
-// Add services to the container.
-builder.Services.AddLzqNSwag(options =>
-{
-    options.Title = "My API";
-    options.Version = "2.0.0";
-    options.EnableSwaggerUI = !builder.Environment.IsProduction();
+builder.SerializationModules()
+    // 模块注册顺序：核心模块放在最前面，WebApi模块放在最后面，业务模块根据需要放在中间。
+    .AddModule<CoreModule>()
+    .AddModule<NSwagModule>()
+    .AddModule<ExternalHttpApiModule>()
+    .AddModule<JwtModule>()
+    .AddModule<SqlSugarModule>()
+    .AddModule<AIModule>()
 
-    // 启用密码保护
-    options.EnableSwaggerUIPassword = true;
-    options.SwaggerUIPassword = "123456";
-    options.SwaggerUIPasswordCookieExpirationMinutes = 720; // 12小时
-});
+    // 
 
-builder.Services.AddExternalHttpApis(builder.Configuration);
-
-// jwt
-builder.Services.AddLzqJwt(builder.Configuration, options =>
-{
-    options.Issuer = "your-app";
-    options.Audience = "your-app";
-    options.SecurityKey = "your-secret-key-at-least-16-chars";
-});
-
-builder.Services.AddLzqAI()
-    .AddSqlSugarChatHistoryProvider();
-
-builder.Services.AddLzqSqlSugar(builder.Configuration);
-
-builder.Services.AddCoreMinimalAPIs();// 一定是Build前最后添加
+    
+    .AddModule<WebApiModule>()
+    .ConfigureModules();
 
 var app = builder.Build();
-
-app.UseCoreExceptionHandler();
-
-app.UseLzqNSwag();
-
-// Configure the HTTP request pipeline.
-app.UseHttpsRedirection();
-
-app.UseAuthentication();
-app.UseAuthorization();
-
-app.MapMasaMinimalAPIs();
-
-
-var summaries = new[]
-{
-    "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
-};
-
-app.MapGet("/weatherforecast", () =>
-{
-    var forecast = Enumerable.Range(1, 5).Select(index =>
-        new WeatherForecast
-        (
-            DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
-            Random.Shared.Next(-20, 55),
-            summaries[Random.Shared.Next(summaries.Length)]
-        ))
-        .ToArray();
-    return forecast;
-});
+app.UseSerializationModules();
 
 app.Run();
-
-internal record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
-{
-    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
-}

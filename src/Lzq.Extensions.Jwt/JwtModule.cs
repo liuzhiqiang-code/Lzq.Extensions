@@ -1,30 +1,40 @@
+﻿using Lzq.Core;
 using Lzq.Core.Interfaces;
+using Lzq.Core.Modules;
 using Lzq.Extensions.Jwt.Options;
 using Lzq.Extensions.Jwt.Services;
+using Masa.BuildingBlocks.Data;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 
 namespace Lzq.Extensions.Jwt;
 
-public static class JwtExtensions
+[DependsOn(typeof(CoreModule))]
+public class JwtModule : BaseModule
 {
-    internal static IServiceCollection AddLzqJwt(
-        this IServiceCollection services,
-        IConfiguration configuration,
-        Action<JwtOptions>? configureOptions = null)
+    public override void Configure(ModuleConfigureContext context)
     {
-        // 注册 Options（支持配置文件 + 代码配置）
-        services.AddOptions<JwtOptions>()
-            .Bind(configuration.GetSection("Jwt"))
-            .Configure(configureOptions ?? (_ => { }));
+        var currentAssembly = typeof(JwtModule).Assembly;
+        MasaApp.TryAddAssemblies(currentAssembly);
 
-        var jwtOptions = services.BuildServiceProvider()
-                    .GetRequiredService<IOptions<JwtOptions>>().Value;
+        var services = context.Services;
+        var configuration = context.Configuration;
+        services.AddOptions<JwtOptions>()
+            .Bind(configuration.GetSection("Jwt"));
+    }
+
+    public override void ConfigureServices(ModuleServiceContext context)
+    {
+        var services = context.Services;
+        var jwtOptions = context.ServiceProvider
+            .GetRequiredService<IOptions<JwtOptions>>().Value;
 
         services.AddJwt(option =>
         {
@@ -56,8 +66,13 @@ public static class JwtExtensions
                 .RequireAuthenticatedUser()
                 .Build();
         });
+    }
 
-        return services;
+    public override void OnPostApplicationInitialization(ModuleInitContext context)
+    {
+        context.Logger.LogInformation("UseAuthentication");
+        context.App.UseAuthentication();
+        context.App.UseAuthorization();
     }
 
     private static void ConfigureJwtBearerOptions(JwtBearerOptions options, JwtOptions jwtOptions)
@@ -80,4 +95,3 @@ public static class JwtExtensions
         };
     }
 }
-

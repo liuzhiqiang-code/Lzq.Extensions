@@ -13,6 +13,7 @@
 		<ProjectReference Include="..\src\Lzq.Extensions.Jwt\Lzq.Extensions.Jwt.csproj" />
 		<ProjectReference Include="..\src\Lzq.Extensions.NSwag\Lzq.Extensions.NSwag.csproj" />
 		<ProjectReference Include="..\src\Lzq.Extensions.Serilog\Lzq.Extensions.Serilog.csproj" />
+		<ProjectReference Include="..\src\Lzq.Extensions.SqlSugar\Lzq.Extensions.SqlSugar.csproj" />
 	</ItemGroup>
 
 </Project>

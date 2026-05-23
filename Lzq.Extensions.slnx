@@ -6,6 +6,7 @@
     <File Path="README.md" />
   </Folder>
   <Folder Name="/src/">
+    <Project Path="src/Lzq.Core.Tests/Lzq.Core.Tests.csproj" Id="64eeb7b2-ddaf-41be-ac94-89f0c930c8c0" />
     <Project Path="src/Lzq.Core/Lzq.Core.csproj" Id="e28c047c-4cf4-4a98-acb1-44959071c449" />
     <Project Path="src/Lzq.Extensions.AI/Lzq.Extensions.AI.csproj" />
     <Project Path="src/Lzq.Extensions.EventBus.RabbitMq.Tests/Lzq.Extensions.EventBus.RabbitMq.Tests.csproj" Id="9f455bd1-e656-4f9d-9cf2-25d605227ad3" />

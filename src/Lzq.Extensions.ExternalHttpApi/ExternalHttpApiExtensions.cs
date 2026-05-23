@@ -26,7 +26,6 @@ public static class ExternalHttpApiExtensions
 
     public static IServiceCollection AddExternalHttpApis(this IServiceCollection services,IConfiguration configuration,params Assembly[] assembliesToScan)
     {
-
         services.AddHttpContextAccessor();
         services.AddTransient<HttpContextHeaderFilter>();
 

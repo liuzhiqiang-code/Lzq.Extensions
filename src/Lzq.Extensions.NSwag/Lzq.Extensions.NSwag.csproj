@@ -21,5 +21,9 @@
 	<ItemGroup>
 		<PackageReference Include="NSwag.AspNetCore" Version="14.6.3" />
 	</ItemGroup>
+	
+	<ItemGroup>
+	  <ProjectReference Include="..\Lzq.Core\Lzq.Core.csproj" />
+	</ItemGroup>
 
 </Project>

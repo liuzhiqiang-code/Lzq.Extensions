@@ -2,7 +2,6 @@
 using System.Security.Claims;
 using System.Text.Json;
 using Lzq.Core.Interfaces;
-using Lzq.Core.Utils;
 using Microsoft.AspNetCore.Http;
 
 namespace Lzq.Extensions.Jwt;

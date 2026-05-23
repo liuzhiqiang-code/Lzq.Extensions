@@ -1,55 +1,37 @@
-﻿using Masa.BuildingBlocks.Data;
+using Lzq.Core.Modules;
+using Masa.BuildingBlocks.Data;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyModel;
 using Microsoft.Extensions.Logging;
-using System.Reflection;
 using System.Text;
 
 namespace Lzq.Core;
 
-public static class CoreExtensions
+/// <summary>
+/// 核心模块，每个应用都应第一个注册。
+/// 负责程序集扫描、自动注入、MiniAPIs、全局异常处理。
+/// </summary>
+public class CoreModule : BaseModule
 {
-    public static IServiceCollection AddCoreAssembly(this IServiceCollection services, string prefix = "Lzq.")
+    public override void Configure(ModuleConfigureContext context)
     {
-        try
-        {
-            var loadedAssemblies = DependencyContext.Default!.RuntimeLibraries
-            .Where(lib => lib.Name.StartsWith(prefix))
-            // 3. 加载程序集
-            .Select(lib => Assembly.Load(new AssemblyName(lib.Name)))
-            .ToList();
-
-            if (loadedAssemblies.Count == 0)
-                throw new InvalidOperationException($"未找到以 '{prefix}' 开头的程序集");
-
-            MasaApp.TryAddAssemblies(loadedAssemblies);
-            return services;
-        }
-        catch (Exception ex)
-        {
-            throw new InvalidOperationException($"加载程序集失败: {ex.Message}", ex);
-        }
+        var currentAssembly = typeof(CoreModule).Assembly;
+        MasaApp.TryAddAssemblies(currentAssembly);
     }
 
-    public static IServiceCollection AddCoreAutoInject(this IServiceCollection services)
+    public override void ConfigureServices(ModuleServiceContext context)
     {
-        services.AddAutoInject(MasaApp.GetAssemblies());
-        return services;
+        context.Services.AddAutoInject(MasaApp.GetAssemblies());
+        context.Services.AddMapster();
     }
 
-    public static IServiceCollection AddCoreMinimalAPIs(this IServiceCollection services)
+    public override void OnApplicationInitialization(ModuleInitContext context)
     {
-        services
-            .AddMasaMinimalAPIs(options =>
-            {
-                options.DisableTrimMethodPrefix = true;//禁用移除方法前缀(上方 `Get`、`Post`、`Put`、`Delete` 请求的前缀)
-                options.MapHttpMethodsForUnmatched = new string[] { "Post" };//当前服务禁用自动注册路由
-            });
-        return services;
+        UseCoreExceptionHandler(context.App);
     }
 
-    public static void UseCoreExceptionHandler(this IApplicationBuilder app)
+
+    private void UseCoreExceptionHandler(IApplicationBuilder app)
     {
         app.UseMasaExceptionHandler(options =>
         {
@@ -90,7 +72,7 @@ public static class CoreExtensions
     /// <summary>
     /// 记录异常到日志
     /// </summary>
-    private static void LogException(ILogger logger, Exception exception)
+    private void LogException(ILogger logger, Exception exception)
     {
         var fullMessage = GetFullExceptionMessage(exception);
         logger.LogError(fullMessage, "发生未处理的异常");
@@ -99,7 +81,7 @@ public static class CoreExtensions
     /// <summary>
     /// 获取完整异常信息（包含内层异常）
     /// </summary>
-    private static string GetFullExceptionMessage(Exception ex)
+    private string GetFullExceptionMessage(Exception ex)
     {
         var sb = new StringBuilder();
         var currentEx = ex;
@@ -125,7 +107,7 @@ public static class CoreExtensions
     /// <summary>
     /// 获取异常级别描述
     /// </summary>
-    private static string GetExceptionLevel(int level) => level switch
+    private string GetExceptionLevel(int level) => level switch
     {
         0 => "外层异常",
         _ => $"内层异常 Lv{level}"
