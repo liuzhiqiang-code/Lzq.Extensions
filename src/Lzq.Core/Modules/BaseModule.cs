@@ -2,10 +2,6 @@
 
 public abstract class BaseModule : IModule
 {
-    public virtual void Configure(ModuleConfigureContext context)
-    {
-    }
-
     public virtual void PreConfigureServices(ModuleServiceContext context)
     {
     }

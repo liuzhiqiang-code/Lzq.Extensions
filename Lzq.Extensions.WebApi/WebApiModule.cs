@@ -1,19 +1,19 @@
-﻿using Lzq.Core.Modules;
-using Masa.BuildingBlocks.Data;
+﻿using Lzq.Core;
+using Lzq.Core.Modules;
+using Lzq.Extensions.AI;
+using Lzq.Extensions.ExternalHttpApi;
+using Lzq.Extensions.Jwt;
+using Lzq.Extensions.NSwag;
+using Lzq.Extensions.SqlSugar;
 
 namespace Lzq.Extensions.WebApi;
 
+[DependsOn(typeof(CoreModule), typeof(NSwagModule), typeof(ExternalHttpApiModule),
+    typeof(JwtModule), typeof(SqlSugarModule), typeof(AIModule))]
 public class WebApiModule : BaseModule
 {
-    public override  void Configure(ModuleConfigureContext context)
-    {
-        var currentAssembly = typeof(WebApiModule).Assembly;
-        MasaApp.TryAddAssemblies(currentAssembly);
-    }
-
     public override void PostConfigureServices(ModuleServiceContext context)
     {
-        context.Services.AddAutoInject(MasaApp.GetAssemblies());
         context.Services
             .AddMasaMinimalAPIs(options =>
             {

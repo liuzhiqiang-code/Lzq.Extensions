@@ -5,7 +5,6 @@ using Lzq.Extensions.AI.Factorys;
 using Lzq.Extensions.AI.Interfaces;
 using Lzq.Extensions.AI.Provider;
 using Lzq.Extensions.SqlSugar;
-using Masa.BuildingBlocks.Data;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.VectorData;
@@ -16,12 +15,6 @@ namespace Lzq.Extensions.AI;
 [DependsOn(typeof(CoreModule), typeof(SqlSugarModule))]
 public class AIModule : BaseModule
 {
-    public override void Configure(ModuleConfigureContext context)
-    {
-        var currentAssembly = typeof(AIModule).Assembly;
-        MasaApp.TryAddAssemblies(currentAssembly);
-    }
-
     public override void ConfigureServices(ModuleServiceContext context)
     {
         var services = context.Services;

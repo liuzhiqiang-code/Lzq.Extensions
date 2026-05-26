@@ -1,6 +1,5 @@
 ﻿using Lzq.Core;
 using Lzq.Core.Modules;
-using Masa.BuildingBlocks.Data;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
@@ -17,23 +16,13 @@ namespace Lzq.Extensions.NSwag;
 [DependsOn(typeof(CoreModule))]
 public class NSwagModule : BaseModule
 {
-    public override void Configure(ModuleConfigureContext context)
-    {
-        var currentAssembly = typeof(NSwagModule).Assembly;
-        MasaApp.TryAddAssemblies(currentAssembly);
-
-        var services = context.Services;
-        var configuration = context.Configuration;
-        services.AddOptions<NSwagOptions>()
-            .Bind(configuration.GetSection("NSwag"));
-    }
-
     public override void ConfigureServices(ModuleServiceContext context)
     { 
         // 从 IConfiguration 中直接绑定 NSwagOptions
         var services = context.Services;
         var configuration = context.Configuration;
-        var options = context.ServiceProvider.GetService<IOptions<NSwagOptions>>()?.Value ?? new NSwagOptions();
+
+        var options = configuration.GetSection("NSwag").Get<NSwagOptions>() ?? new NSwagOptions();
 
         foreach (var docInfo in options.Documents)
         {

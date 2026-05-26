@@ -1,10 +1,8 @@
 ﻿using FreeRedis;
 using Lzq.Core;
 using Lzq.Core.Modules;
-using Masa.BuildingBlocks.Data;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Options;
 using System.Text.Json;
 
 namespace Lzq.Extensions.Redis;
@@ -12,11 +10,8 @@ namespace Lzq.Extensions.Redis;
 [DependsOn(typeof(CoreModule))]
 public class RedisModule : BaseModule
 {
-    public override void Configure(ModuleConfigureContext context)
+    public override void PreConfigureServices(ModuleServiceContext context)
     {
-        var currentAssembly = typeof(RedisModule).Assembly;
-        MasaApp.TryAddAssemblies(currentAssembly);
-
         var services = context.Services;
         var configuration = context.Configuration;
 
@@ -33,7 +28,7 @@ public class RedisModule : BaseModule
         // 2. 注册原生 IRedisClient
         services.AddSingleton<IRedisClient>(sp =>
         {
-            var options = sp.GetRequiredService<IOptions<LzqRedisOptions>>().Value;
+            var options = context.Configuration.GetSection("Redis").Get<LzqRedisOptions>() ?? throw new ArgumentException("未找到Redis配置");
             try
             {
                 var csb = ConnectionStringBuilder.Parse(options.ConnectionString);

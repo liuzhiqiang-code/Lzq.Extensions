@@ -19,22 +19,10 @@ namespace Lzq.Extensions.Jwt;
 [DependsOn(typeof(CoreModule))]
 public class JwtModule : BaseModule
 {
-    public override void Configure(ModuleConfigureContext context)
-    {
-        var currentAssembly = typeof(JwtModule).Assembly;
-        MasaApp.TryAddAssemblies(currentAssembly);
-
-        var services = context.Services;
-        var configuration = context.Configuration;
-        services.AddOptions<JwtOptions>()
-            .Bind(configuration.GetSection("Jwt"));
-    }
-
     public override void ConfigureServices(ModuleServiceContext context)
     {
         var services = context.Services;
-        var jwtOptions = context.ServiceProvider
-            .GetRequiredService<IOptions<JwtOptions>>().Value;
+        var jwtOptions = context.Configuration.GetSection("Jwt").Get<JwtOptions>()??throw new ArgumentException("未找到jwt配置");
 
         services.AddJwt(option =>
         {

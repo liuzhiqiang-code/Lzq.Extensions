@@ -8,12 +8,10 @@ public class ModuleServiceContext
     public IServiceCollection Services { get; }
 
     public IConfiguration Configuration { get; }
-    public IServiceProvider ServiceProvider { get; }
 
-    public ModuleServiceContext(IServiceCollection services, IConfiguration configuration,IServiceProvider serviceProvider)
+    public ModuleServiceContext(IServiceCollection services, IConfiguration configuration)
     {
         Services = services;
         Configuration = configuration;
-        ServiceProvider = serviceProvider;
     }
 }

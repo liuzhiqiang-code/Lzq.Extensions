@@ -1,5 +1,4 @@
 using Lzq.Core.Modules;
-using Masa.BuildingBlocks.Data;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -7,21 +6,10 @@ using System.Text;
 
 namespace Lzq.Core;
 
-/// <summary>
-/// 核心模块，每个应用都应第一个注册。
-/// 负责程序集扫描、自动注入、MiniAPIs、全局异常处理。
-/// </summary>
 public class CoreModule : BaseModule
 {
-    public override void Configure(ModuleConfigureContext context)
-    {
-        var currentAssembly = typeof(CoreModule).Assembly;
-        MasaApp.TryAddAssemblies(currentAssembly);
-    }
-
     public override void ConfigureServices(ModuleServiceContext context)
     {
-        context.Services.AddAutoInject(MasaApp.GetAssemblies());
         context.Services.AddMapster();
     }
 
