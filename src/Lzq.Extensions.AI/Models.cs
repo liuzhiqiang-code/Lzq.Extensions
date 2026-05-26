@@ -37,6 +37,11 @@ public enum McpTypeEnum
 
 
 /// <summary>
+/// 流式运行结果
+/// </summary>
+public record StreamingResult(string Content, string SessionDbKey, long PromptTokens, long CompletionTokens);
+
+/// <summary>
 /// 流式回调事件类型
 /// </summary>
 public enum StreamingEventType

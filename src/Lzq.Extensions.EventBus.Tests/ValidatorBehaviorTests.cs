@@ -1,5 +1,6 @@
 using FluentValidation;
 using FluentValidation.Results;
+using Lzq.Extensions.EventBus.Pipelines;
 using MediatR;
 using Microsoft.Extensions.Logging;
 using Moq;

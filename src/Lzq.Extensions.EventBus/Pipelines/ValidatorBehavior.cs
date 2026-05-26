@@ -2,6 +2,8 @@
 using MediatR;
 using Microsoft.Extensions.Logging;
 
+namespace Lzq.Extensions.EventBus.Pipelines;
+
 public class ValidatorBehavior<TRequest, TResponse>(IEnumerable<IValidator<TRequest>> validators, ILogger<ValidatorBehavior<TRequest, TResponse>> logger)
     : IPipelineBehavior<TRequest, TResponse> where TRequest : notnull
 {

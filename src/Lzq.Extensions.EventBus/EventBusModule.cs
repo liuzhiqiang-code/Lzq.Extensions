@@ -1,5 +1,8 @@
 ﻿using Lzq.Core;
 using Lzq.Core.Modules;
+using Lzq.Extensions.EventBus.Integration;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Lzq.Extensions.EventBus;
 
@@ -8,16 +11,11 @@ public class EventBusModule : BaseModule
 {
     public override void ConfigureServices(ModuleServiceContext context)
     {
-        var services = context.Services;
-        services.AddEventBus()
-            .AddIntegrationEvent(option =>
-            {
-                option.UseMemoryOutbox();
-                //option.AddRabbitMqPublisher(opt =>
-                //{
-                //    // RabbitMQ 连接信息从 appsettings.json 读取
-                //    // 此处为兜底默认值
-                //});
-            });
+        context.Services.AddEventBus();
+
+        if (context.Configuration.GetValue<bool>("EventBus:UseOutbox", true))
+        {
+            context.Services.AddScoped<IIntegrationEventStore, DefaultMemoryEventStore>();
+        }
     }
 }

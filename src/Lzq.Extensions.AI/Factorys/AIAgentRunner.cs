@@ -69,13 +69,13 @@ public class AIAgentRunner : IAIAgentRunner
 
     #region 流式运行（创建 + 运行）
 
-    public async Task<(string, string)> RunStreamingAsync(AISetting setting, AIAgentModel model, string message, Func<StreamingEventArgs, Task> callback, string? sessionDbKey = null, CancellationToken cancellationToken = default(CancellationToken))
+    public async Task<StreamingResult> RunStreamingAsync(AISetting setting, AIAgentModel model, string message, Func<StreamingEventArgs, Task> callback, string? sessionDbKey = null, CancellationToken cancellationToken = default(CancellationToken))
     {
         var agent = await _factory.CreateAsync(setting, model);
         return await RunStreamingAsync(agent, message, callback, sessionDbKey, cancellationToken);
     }
 
-    public async Task<(string, string)> RunStreamingAsync(IChatClient chatClient, AIAgentModel model, string message, Func<StreamingEventArgs, Task> callback, string? sessionDbKey = null, CancellationToken cancellationToken = default(CancellationToken))
+    public async Task<StreamingResult> RunStreamingAsync(IChatClient chatClient, AIAgentModel model, string message, Func<StreamingEventArgs, Task> callback, string? sessionDbKey = null, CancellationToken cancellationToken = default(CancellationToken))
     {
         var agent = await _factory.CreateAsync(chatClient, model);
         return await RunStreamingAsync(agent, message, callback, sessionDbKey, cancellationToken);
@@ -85,7 +85,7 @@ public class AIAgentRunner : IAIAgentRunner
 
     #region 流式运行（已有 Agent 实例）
 
-    public async Task<(string, string)> RunStreamingAsync(AIAgent agent, string message, Func<StreamingEventArgs, Task> callback, string? sessionDbKey = null, CancellationToken cancellationToken = default(CancellationToken))
+    public async Task<StreamingResult> RunStreamingAsync(AIAgent agent, string message, Func<StreamingEventArgs, Task> callback, string? sessionDbKey = null, CancellationToken cancellationToken = default(CancellationToken))
     {
         sessionDbKey ??= Guid.NewGuid().ToString();
         var agentSession = await InitializeAgentSessionAsync(agent, sessionDbKey);
@@ -129,6 +129,8 @@ public class AIAgentRunner : IAIAgentRunner
             var s = buffer.ToString();
             return s.EndsWith("。") || s.EndsWith("\n") || s.EndsWith("！") || s.EndsWith("？") || s.Length >= 100;
         }
+
+        AgentResponseUpdate? lastUpdate = null;
 
         try
         {
@@ -223,6 +225,8 @@ public class AIAgentRunner : IAIAgentRunner
                         }
                     }
                 }
+
+                lastUpdate = update;
             }
         }
         catch (OperationCanceledException)
@@ -240,7 +244,20 @@ public class AIAgentRunner : IAIAgentRunner
             textBuffer.Clear();
         }
 
-        return (sb.ToString(), sessionDbKey);
+        long promptTokens = 0, completionTokens = 0;
+        if (lastUpdate?.Contents is { } contents)
+        {
+            foreach (var content in contents)
+            {
+                if (content is UsageContent usage)
+                {
+                    promptTokens = usage.Details.InputTokenCount ?? 0;
+                    completionTokens = usage.Details.OutputTokenCount ?? 0;
+                }
+            }
+        }
+
+        return new StreamingResult(sb.ToString(), sessionDbKey, promptTokens, completionTokens);
     }
 
     #endregion

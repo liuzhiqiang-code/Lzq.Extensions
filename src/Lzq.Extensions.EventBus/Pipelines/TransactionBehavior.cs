@@ -4,6 +4,8 @@ using MediatR;
 using Microsoft.Extensions.Logging;
 using System.Reflection;
 
+namespace Lzq.Extensions.EventBus.Pipelines;
+
 public class TransactionBehavior<TRequest, TResponse>(IUnitOfWork unitOfWork, ILogger<TransactionBehavior<TRequest, TResponse>> logger)
     : IPipelineBehavior<TRequest, TResponse> where TRequest : notnull
 {

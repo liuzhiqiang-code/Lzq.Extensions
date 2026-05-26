@@ -1,6 +1,8 @@
 ﻿using Lzq.Core;
 using Lzq.Core.Modules;
 using Lzq.Extensions.AI;
+using Lzq.Extensions.EventBus;
+using Lzq.Extensions.EventBus.RabbitMq;
 using Lzq.Extensions.ExternalHttpApi;
 using Lzq.Extensions.Jwt;
 using Lzq.Extensions.NSwag;
@@ -9,7 +11,8 @@ using Lzq.Extensions.SqlSugar;
 namespace Lzq.Extensions.WebApi;
 
 [DependsOn(typeof(CoreModule), typeof(NSwagModule), typeof(ExternalHttpApiModule),
-    typeof(JwtModule), typeof(SqlSugarModule), typeof(AIModule))]
+    typeof(JwtModule), typeof(SqlSugarModule), typeof(AIModule),
+    typeof(EventBusModule), typeof(EventBusRabbitMqModule))]
 public class WebApiModule : BaseModule
 {
     public override void PostConfigureServices(ModuleServiceContext context)

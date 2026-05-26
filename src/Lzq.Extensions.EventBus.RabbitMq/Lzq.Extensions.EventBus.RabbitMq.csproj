@@ -24,6 +24,7 @@
 
 	<ItemGroup>
 		<ProjectReference Include="..\Lzq.Extensions.EventBus\Lzq.Extensions.EventBus.csproj" />
+		<ProjectReference Include="..\Lzq.Core\Lzq.Core.csproj" />
 	</ItemGroup>
 
 </Project>

@@ -1,5 +1,6 @@
 ﻿using Lzq.Core.Attributes;
 using Lzq.Core.Interfaces;
+using Lzq.Extensions.EventBus.Pipelines;
 using MediatR;
 using Microsoft.Extensions.Logging;
 using Moq;

@@ -21,14 +21,14 @@ public interface IAIAgentRunner
 
     #region 流式运行（创建 + 运行）
 
-    Task<(string, string)> RunStreamingAsync(AISetting setting, AIAgentModel model, string message, Func<StreamingEventArgs, Task> callback, string? sessionDbKey = null, CancellationToken cancellationToken = default(CancellationToken));
-    Task<(string, string)> RunStreamingAsync(IChatClient chatClient, AIAgentModel model, string message, Func<StreamingEventArgs, Task> callback, string? sessionDbKey = null, CancellationToken cancellationToken = default(CancellationToken));
+    Task<StreamingResult> RunStreamingAsync(AISetting setting, AIAgentModel model, string message, Func<StreamingEventArgs, Task> callback, string? sessionDbKey = null, CancellationToken cancellationToken = default(CancellationToken));
+    Task<StreamingResult> RunStreamingAsync(IChatClient chatClient, AIAgentModel model, string message, Func<StreamingEventArgs, Task> callback, string? sessionDbKey = null, CancellationToken cancellationToken = default(CancellationToken));
 
     #endregion
 
     #region 流式运行（已有 Agent 实例）
 
-    Task<(string, string)> RunStreamingAsync(AIAgent agent, string message, Func<StreamingEventArgs, Task> callback, string? sessionDbKey = null, CancellationToken cancellationToken = default(CancellationToken));
+    Task<StreamingResult> RunStreamingAsync(AIAgent agent, string message, Func<StreamingEventArgs, Task> callback, string? sessionDbKey = null, CancellationToken cancellationToken = default(CancellationToken));
 
     #endregion
 

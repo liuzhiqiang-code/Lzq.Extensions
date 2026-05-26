@@ -186,7 +186,7 @@ public class AIService : ServiceBase
             var textBuilder = new StringBuilder();
 
             // 第一轮：查询工单
-            var (answer1, sessionDbKey) = await AIAgentRunner.RunStreamingAsync(
+            var result1 = await AIAgentRunner.RunStreamingAsync(
                 agent,
                 "帮我查一下 WO-20260510-001 的进度",
                 async (chunk) => { textBuilder.Append(chunk); });
@@ -194,18 +194,18 @@ public class AIService : ServiceBase
             textBuilder.Clear();
 
             // 第二轮：基于上下文追问（复用 sessionDbKey）
-            var (answer2, _) = await AIAgentRunner.RunStreamingAsync(
+            var result2 = await AIAgentRunner.RunStreamingAsync(
                 agent,
                 "这个工单状态是什么意思？",
                 async (chunk) => { textBuilder.Append(chunk); },
-                sessionDbKey);  // ← 复用，Agent 会记住上一轮的工单
+                result1.SessionDbKey);  // ← 复用，Agent 会记住上一轮的工单
 
             result.Add(new SkillDemoResult
             {
                 Scene = "连续对话（带记忆）",
                 Question = "第一轮：查 WO-20260510-001\n第二轮：追问状态含义",
-                Answer = $"第一轮回答：{answer1}\n\n第二轮回答：{answer2}",
-                SessionDbKey = sessionDbKey,
+                Answer = $"第一轮回答：{result1.Content}\n\n第二轮回答：{result2.Content}",
+                SessionDbKey = result1.SessionDbKey,
                 Success = true,
             });
         }
@@ -246,7 +246,7 @@ public class AIService : ServiceBase
         var events = new List<StreamingEvent>();
         var fullText = new StringBuilder();
 
-        var (text, sessionDbKey) = await AIAgentRunner.RunStreamingAsync(
+        var result = await AIAgentRunner.RunStreamingAsync(
             agent,
             "帮我查一下 WO-20260510-001 的工单进度，然后告诉我接下来该怎么做",
             async (args) =>
@@ -297,8 +297,8 @@ public class AIService : ServiceBase
 
         return ApiResult.Success(new
         {
-            FullText = text,
-            SessionDbKey = sessionDbKey,
+            FullText = result.Content,
+            SessionDbKey = result.SessionDbKey,
             TotalEvents = events.Count,
             Events = events
         });
@@ -330,7 +330,7 @@ public class AIService : ServiceBase
         var events = new List<StreamingEvent>();
         var fullText = new StringBuilder();
 
-        var (text, sessionDbKey) = await AIAgentRunner.RunStreamingAsync(
+        var result = await AIAgentRunner.RunStreamingAsync(
             agent,
             "帮我生成一个0到6月随机数的折线图",
             async (args) =>
@@ -403,8 +403,8 @@ public class AIService : ServiceBase
 
         return ApiResult.Success(new
         {
-            FullText = text,
-            SessionDbKey = sessionDbKey,
+            FullText = result.Content,
+            SessionDbKey = result.SessionDbKey,
             TotalEvents = events.Count,
             Events = events
         });
