@@ -1,6 +1,8 @@
-﻿using Lzq.Extensions.SqlSugar.Config;
+﻿using Lzq.Core.Interfaces;
+using Lzq.Extensions.SqlSugar.Config;
 using Lzq.Extensions.SqlSugar.Repository;
 using Lzq.Extensions.SqlSugar.SeedData;
+using Lzq.Extensions.SqlSugar.UnitOfWork;
 using Masa.BuildingBlocks.Data;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
@@ -64,6 +66,7 @@ public static class SqlSugarExtensions
             client.UseQueryFilter();
         });
         services.AddSingleton<ISqlSugarClient>(sqlSugar);
+        services.AddScoped<IUnitOfWork, SqlSugarUnitWork>();
 
         sqlSugar.UseCodeFirst(sp);
         sqlSugar.UseSeedData(sp);

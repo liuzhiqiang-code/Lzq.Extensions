@@ -9,15 +9,19 @@ namespace Lzq.Extensions.AI.Factorys;
 
 public class ChatClientFactory: IChatClientFactory, IDisposable
 {
+    private const int MaxCacheSize = 50;
+    private const int CleanupBatchSize = 20;
     private readonly ConcurrentDictionary<string, IChatClient> _chatClientDictionary = new();
+    private readonly ConcurrentQueue<string> _creationOrder = new();
 
     private void ClearAndDisposeClients()
     {
         // 1. 提取所有旧引用
         var oldClients = _chatClientDictionary.Values.ToList();
 
-        // 2. 清空字典防止新请求拿到旧引用
+        // 2. 清空字典和队列
         _chatClientDictionary.Clear();
+        _creationOrder.Clear();
 
         // 3. 逐个释放
         foreach (var client in oldClients)
@@ -35,12 +39,35 @@ public class ChatClientFactory: IChatClientFactory, IDisposable
         }
     }
 
+    private void EvictOldest()
+    {
+        for (int i = 0; i < CleanupBatchSize; i++)
+        {
+            if (_creationOrder.TryDequeue(out var configId) &&
+                _chatClientDictionary.TryRemove(configId, out var client))
+            {
+                try { client.Dispose(); }
+                catch { }
+            }
+        }
+    }
+
     public IChatClient GetOrCreate(AISetting aiSetting)
     {
         if (aiSetting == null)
             throw new InvalidOperationException($"参数不能为空");
 
-        return _chatClientDictionary.GetOrAdd(aiSetting.ConfigId, _ => CreateChatClient(aiSetting));
+        // 缓存超过阈值时淘汰最旧的一批
+        if (_chatClientDictionary.Count >= MaxCacheSize)
+        {
+            EvictOldest();
+        }
+
+        return _chatClientDictionary.GetOrAdd(aiSetting.ConfigId, key =>
+        {
+            _creationOrder.Enqueue(key);
+            return CreateChatClient(aiSetting);
+        });
     }
 
     private IChatClient CreateChatClient(AISetting aiSetting)

@@ -20,5 +20,4 @@ public interface IChatClientFactory
     /// <param name="aiSetting"></param>
     /// <returns></returns>
     OpenAI.Chat.ChatClient CreateOpenAIChatClient(AISetting aiSetting);
-
 }
