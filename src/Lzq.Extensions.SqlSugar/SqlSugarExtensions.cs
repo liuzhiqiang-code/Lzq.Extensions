@@ -29,14 +29,27 @@ public static class SqlSugarExtensions
         var connectionConfigs = new List<ConnectionConfig>();
         foreach (var item in dBConfigs)
         {
-            connectionConfigs.Add(new ConnectionConfig
+            var config = new ConnectionConfig
             {
                 ConfigId = item.Tag,
                 DbType = item.DbType,
                 ConnectionString = item.ConnectionString,
                 IsAutoCloseConnection = true,
                 ConfigureExternalServices = ConfigureExternalServices,
-            });
+            };
+
+            if (item.Slaves?.Count > 0)
+            {
+                config.SlaveConnectionConfigs = item.Slaves
+                    .Select(s => new SlaveConnectionConfig
+                    {
+                        HitRate = s.HitRate,
+                        ConnectionString = s.ConnectionString,
+                    })
+                    .ToList();
+            }
+
+            connectionConfigs.Add(config);
         }
 
         // 注册种子数据等
